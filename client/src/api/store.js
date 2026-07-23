@@ -22,4 +22,7 @@ export const orderApi = {
   create: (payload) => api.post('/orders', payload),
   listMine: (params) => api.get('/orders/my-orders', { params }),
   getMine: (orderCode) => api.get(`/orders/my-orders/${orderCode}`),
+  cancelRequest: (id) => api.post(`/orders/${id}/cancel-request`),
+  createVnpayOrder: (payload) => api.post('/payments/vnpay/create', payload),
 };
+

@@ -133,3 +133,24 @@ export const getMyOrderByCode = asyncHandler(async (req, res) => {
   if (!order) throw new ApiError(404, 'Không tìm thấy đơn hàng.');
   res.json({ data: order });
 });
+
+export const requestCancelOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findOne({ userId: req.user._id, _id: req.params.id });
+  if (!order) throw new ApiError(404, 'Không tìm thấy đơn hàng.');
+
+  if (!['PENDING', 'CONFIRMED'].includes(order.status)) {
+    throw new ApiError(400, 'Chỉ có thể yêu cầu hủy đơn hàng ở trạng thái Chờ xác nhận hoặc Đã xác nhận.');
+  }
+
+  order.status = 'CANCEL_REQUESTED';
+  order.statusHistory.push({
+    status: 'CANCEL_REQUESTED',
+    note: req.body.note?.trim() || 'Khách hàng yêu cầu hủy đơn.',
+    changedBy: req.user._id,
+    changedAt: new Date(),
+  });
+
+  await order.save();
+  res.json({ message: 'Gửi yêu cầu hủy đơn thành công.', data: order });
+});
+
