@@ -1,11 +1,24 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import BrandsPage from './pages/admin/BrandsPage';
 import ProductFormPage from './pages/admin/ProductFormPage';
 import ProductsPage from './pages/admin/ProductsPage';
+import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage';
+import DashboardPage from './pages/admin/DashboardPage';
+import UsersPage from './pages/admin/UsersPage';
+import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
+
+function AdminIndexRedirect() {
+  const { user } = useAuth();
+  if (user?.role === 'ADMIN') {
+    return <Navigate to="dashboard" replace />;
+  }
+  return <Navigate to="orders" replace />;
+}
 import RegisterPage from './pages/auth/RegisterPage';
 import CartPage from './pages/customer/CartPage';
 import CheckoutPage from './pages/customer/CheckoutPage';
@@ -34,12 +47,19 @@ export default function App() {
           <Route path="orders/success/:orderCode" element={<OrderSuccessPage />} />
           <Route path="orders/:orderCode" element={<OrderDetailPage />} />
         </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN']} />}>
+        <Route element={<ProtectedRoute roles={['ADMIN', 'STAFF']} />}>
           <Route path="admin" element={<AdminLayout />}>
-            <Route path="products" element={<ProductsPage />} />
-            <Route path="products/new" element={<ProductFormPage />} />
-            <Route path="products/:id/edit" element={<ProductFormPage />} />
-            <Route path="brands" element={<BrandsPage />} />
+            <Route index element={<AdminIndexRedirect />} />
+            <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="orders/:id" element={<AdminOrderDetailPage />} />
+            <Route element={<ProtectedRoute roles={['ADMIN']} />}>
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="products" element={<ProductsPage />} />
+              <Route path="products/new" element={<ProductFormPage />} />
+              <Route path="products/:id/edit" element={<ProductFormPage />} />
+              <Route path="brands" element={<BrandsPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>

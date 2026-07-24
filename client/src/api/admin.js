@@ -20,3 +20,17 @@ export const productApi = {
   },
   deleteImage: (id, imageId) => api.delete(`/admin/products/${id}/images/${imageId}`),
 };
+
+export const userApi = {
+  list: (params) => api.get('/admin/users', { params }),
+  updateStatus: (id, status) => api.patch(`/admin/users/${id}/status`, { status }),
+  updateRole: (id, role) => api.patch(`/admin/users/${id}/role`, { role }),
+};
+
+export const dashboardApi = {
+  getOverview: () => api.get('/admin/dashboard/overview'),
+  getRevenue: (params) => api.get('/admin/dashboard/revenue', { params }),
+  getTopProducts: () => api.get('/admin/dashboard/top-products'),
+  getLowStock: () => api.get('/admin/dashboard/low-stock'),
+};
+

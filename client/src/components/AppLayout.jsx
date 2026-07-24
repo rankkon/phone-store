@@ -13,7 +13,7 @@ export default function AppLayout() {
           {user?.role === 'CUSTOMER' && <NavLink to="/cart">Giỏ hàng</NavLink>}
           {user?.role === 'CUSTOMER' && <NavLink to="/orders">Đơn hàng</NavLink>}
           {user ? <NavLink to="/profile">Hồ sơ</NavLink> : <NavLink to="/login">Đăng nhập</NavLink>}
-          {user?.role === 'ADMIN' && <NavLink to="/admin/products">Quản trị</NavLink>}
+          {user && (user.role === 'ADMIN' || user.role === 'STAFF') && <NavLink to="/admin">Quản trị</NavLink>}
           {user && <button className="link-button" onClick={logout}>Đăng xuất</button>}
         </nav>
       </header>

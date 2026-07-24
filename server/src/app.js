@@ -8,6 +8,10 @@ import adminProductRoutes from './routes/adminProductRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import voucherRoutes from './routes/voucherRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import managementOrderRoutes from './routes/managementOrderRoutes.js';
+import adminUserRoutes from './routes/adminUserRoutes.js';
+import adminDashboardRoutes from './routes/adminDashboardRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 
 const app = express();
@@ -23,9 +27,13 @@ app.use('/api/brands', brandRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/admin/brands', adminBrandRoutes);
 app.use('/api/admin/products', adminProductRoutes);
+app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/management/orders', managementOrderRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
