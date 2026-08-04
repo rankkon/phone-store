@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { managementOrderApi } from '../../api/management';
 import { getApiError } from '../../api/http';
@@ -15,8 +15,9 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
 
-  const fetchOrders = () => {
+  const fetchOrders = useCallback(() => {
     setLoading(true);
+    setError('');
     managementOrderApi.list({
       status: statusFilter || undefined,
       search: searchQuery.trim() || undefined,
@@ -32,11 +33,11 @@ export default function AdminOrdersPage() {
         setError(getApiError(requestError));
         setLoading(false);
       });
-  };
+  }, [page, searchQuery, statusFilter]);
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter, searchQuery, page]);
+  }, [fetchOrders]);
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);

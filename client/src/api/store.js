@@ -16,6 +16,14 @@ export const cartApi = {
 
 export const voucherApi = {
   validate: (code) => api.post('/vouchers/validate', { code }),
+  available: () => api.get('/vouchers/available'),
+};
+
+export const reviewApi = {
+  list: (params) => api.get('/reviews', { params }),
+  mine: (productId) => api.get('/reviews/mine', { params: { productId } }),
+  create: (payload) => api.post('/reviews', payload),
+  update: (reviewId, payload) => api.patch(`/reviews/${reviewId}`, payload),
 };
 
 export const orderApi = {
@@ -24,5 +32,6 @@ export const orderApi = {
   getMine: (orderCode) => api.get(`/orders/my-orders/${orderCode}`),
   cancelRequest: (id) => api.post(`/orders/${id}/cancel-request`),
   createVnpayOrder: (payload) => api.post('/payments/vnpay/create', payload),
+  retryVnpayOrder: (orderCode) => api.post(`/payments/vnpay/orders/${orderCode}/retry`),
 };
 

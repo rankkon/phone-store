@@ -62,8 +62,8 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
 // PATCH /api/admin/users/:id/role
 export const updateUserRole = asyncHandler(async (req, res) => {
   const { role } = req.body;
-  if (!['CUSTOMER', 'STAFF', 'ADMIN'].includes(role)) {
-    throw new ApiError(400, 'Vai trò không hợp lệ.');
+  if (!['CUSTOMER', 'STAFF'].includes(role)) {
+    throw new ApiError(400, 'Chỉ có thể chuyển vai trò giữa CUSTOMER và STAFF.');
   }
 
   if (req.user._id.toString() === req.params.id) {
@@ -72,6 +72,7 @@ export const updateUserRole = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'Không tìm thấy người dùng.');
+  if (user.role === 'ADMIN') throw new ApiError(400, 'Không thể thay đổi vai trò của tài khoản Admin.');
 
   user.role = role;
   await user.save();

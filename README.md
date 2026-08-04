@@ -1,6 +1,6 @@
 # Phone Store
 
-Website thương mại điện tử bán điện thoại theo MERN Stack. Hướng dẫn này dành cho người mới clone repository và muốn chạy dự án trên máy cá nhân.
+Website thương mại điện tử bán điện thoại theo MERN Stack. Dự án có storefront, quản trị sản phẩm/đơn/người dùng, dashboard, thanh toán COD và tích hợp VNPay Sandbox. Hướng dẫn này dành cho người mới clone repository và muốn chạy dự án trên máy cá nhân.
 
 Thông tin nhanh về cấu trúc và các chức năng đã có: [CODEBASE_SUMMARY.md](CODEBASE_SUMMARY.md). Phạm vi/định hướng toàn dự án: [PHONE_STORE_FINAL_PROJECT_SPEC.md](PHONE_STORE_FINAL_PROJECT_SPEC.md).
 
@@ -62,7 +62,27 @@ CLIENT_URL=http://localhost:5173
 
 JWT_SECRET=thay-bang-chuoi-bi-mat-dai-va-kho-doan
 JWT_EXPIRES_IN=1d
+JWT_REFRESH_SECRET=thay-bang-chuoi-bi-mat-khac-va-dai
+JWT_REFRESH_EXPIRES_IN=7d
+
+DEFAULT_SHIPPING_FEE=30000
+FREE_SHIPPING_THRESHOLD=15000000
 ```
+
+#### Xác minh email và mã bảo mật qua SMTP
+
+SMTP được dùng để gửi mã OTP 6 số khi đăng ký, xác minh email, đổi mật khẩu trong hồ sơ và quên mật khẩu. Mỗi mã có hiệu lực 10 phút, dùng một lần và bị giới hạn số lần nhập sai.
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=Phone Store <no-reply@example.com>
+```
+
+Không có cấu hình SMTP, không thể đăng ký tài khoản mới hoặc thực hiện các thao tác cần mã email. Tài khoản Customer mới chỉ được mua hàng sau khi đã xác minh email trong hồ sơ.
 
 #### MongoDB local
 
@@ -98,6 +118,19 @@ CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 ```
 
+#### VNPay Sandbox (tùy chọn)
+
+Chỉ cần cấu hình khi muốn thanh toán VNPay. Không commit thông tin do VNPay cấp và không dùng thông tin Sandbox cho production. Đăng ký Sandbox để nhận `VNP_TMNCODE` và `VNP_HASHSECRET` tại [VNPay Sandbox](https://sandbox.vnpayment.vn/devreg/); mã mẫu cũ `2QX1X1TW` không còn được gateway chấp nhận.
+
+```env
+VNP_TMNCODE=
+VNP_HASHSECRET=
+VNP_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNP_RETURNURL=http://localhost:5000/api/payments/vnpay/return
+```
+
+Nếu thiếu một trong bốn biến này, checkout COD vẫn dùng được nhưng request tạo thanh toán VNPay sẽ báo lỗi cấu hình. Với đơn VNPay ở trạng thái chờ thanh toán, khách có thể mở lại liên kết bằng nút **Tiếp tục thanh toán qua VNPay** ở trang chi tiết đơn; hệ thống không tạo thêm đơn hoặc trừ kho lần nữa.
+
 ### Frontend
 
 Tạo `client/.env`:
@@ -126,11 +159,13 @@ Mỗi khi backend kết nối MongoDB, hệ thống tự kiểm tra và tạo c�
 
 | Vai trò | Email | Mật khẩu |
 |---|---|---|
-| Admin | `admin@phonestore.local` | `Admin@123` |
-| Staff | `staff@phonestore.local` | `Staff@123` |
-| Client (Customer) | `client@phonestore.local` | `Client@123` |
+| Admin | `admin@gmail.com` | `admin123` |
+| Staff | `staff@gmail.com` | `staff123` |
+| Customer | `customer@gmail.com` | `customer123` |
 
 Không cần chạy seed để có ba tài khoản này.
+
+Ba tài khoản demo có trạng thái email đã xác minh để không làm gián đoạn dữ liệu demo. Chúng không gửi mã OTP qua email vì các địa chỉ Gmail ngắn này chỉ dành cho demo; hãy đăng ký Customer bằng email thật của bạn để kiểm tra luồng mã email.
 
 Để có hãng, sản phẩm và voucher mẫu phục vụ trải nghiệm storefront, chạy một lần:
 
@@ -172,8 +207,12 @@ npm run dev
 
 - Frontend: `http://localhost:5173`
 - Backend health check: `http://localhost:5000/api/health`
-- Đăng nhập bằng tài khoản Admin rồi vào **Quản trị** để thêm hãng/sản phẩm.
-- Đăng nhập bằng Client để xem sản phẩm, thêm giỏ, áp dụng `WELCOME10` và đặt đơn COD.
+- Đăng nhập bằng tài khoản Admin rồi vào **Quản trị** để thêm hãng/sản phẩm/voucher, quản lý user và xem dashboard.
+- Đăng nhập bằng tài khoản Staff để xem, cập nhật đơn và xử lý yêu cầu hủy.
+- Đăng nhập bằng Customer để xem sản phẩm, thêm giỏ, áp dụng `WELCOME10`, đặt COD hoặc thử VNPay khi đã cấu hình.
+- Mở chi tiết sản phẩm để xem thống kê/lọc đánh giá theo sao; Customer đã xác minh email có một đánh giá duy nhất trên mỗi sản phẩm và chỉ có thể sửa đánh giá của chính mình.
+- Mở menu tên tài khoản để vào **Ưu đãi của tôi**, hồ sơ hoặc đơn hàng; footer có các liên kết Về chúng tôi, Liên hệ và hỗ trợ khách hàng.
+- Đăng nhập Admin và vào **Tổng quan** để xem biểu đồ doanh thu/lợi nhuận; có thể chọn nhóm theo ngày, tháng, năm, khoảng thời gian và line hiển thị.
 
 Trước khi push code, chạy:
 
@@ -190,4 +229,6 @@ npm run build
 | `querySrv ECONNREFUSED` | Dùng Standard connection string của Atlas như hướng dẫn ở trên, hoặc kiểm tra DNS/VPN/mạng. |
 | Không kết nối được Atlas | Kiểm tra Network Access, username/password và URL-encoding mật khẩu. |
 | Upload ảnh báo Cloudinary chưa cấu hình | Điền đủ ba biến `CLOUDINARY_*` rồi khởi động lại backend. |
+| VNPay báo chưa cấu hình hoặc mã website không hợp lệ | Đăng ký Sandbox để nhận `VNP_TMNCODE` và `VNP_HASHSECRET` riêng, điền đủ bốn biến `VNP_*` trong `server/.env`, rồi khởi động lại backend. |
+| Đăng ký, xác minh hoặc quên mật khẩu báo chưa cấu hình email | Điền đủ các biến `SMTP_*` trong `server/.env`, sau đó khởi động lại backend. |
 | Frontend không gọi được API | Chạy backend, kiểm tra `VITE_API_URL` và `CLIENT_URL`, sau đó khởi động lại Vite. |

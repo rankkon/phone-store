@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { userApi } from '../../api/admin';
 import { useAuth } from '../../context/AuthContext';
 import { getApiError } from '../../api/http';
@@ -18,8 +18,9 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
 
-  const fetchUsers = () => {
+  const fetchUsers = useCallback(() => {
     setLoading(true);
+    setError('');
     userApi.list({
       role: roleFilter || undefined,
       search: searchQuery.trim() || undefined,
@@ -35,11 +36,11 @@ export default function UsersPage() {
         setError(getApiError(err));
         setLoading(false);
       });
-  };
+  }, [page, roleFilter, searchQuery]);
 
   useEffect(() => {
     fetchUsers();
-  }, [roleFilter, searchQuery, page]);
+  }, [fetchUsers]);
 
   const handleToggleStatus = (targetUser) => {
     const nextStatus = targetUser.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
@@ -130,6 +131,7 @@ export default function UsersPage() {
               <tbody>
                 {users.map((targetUser) => {
                   const isSelf = currentUser?._id === targetUser._id;
+                  const roleCanBeChanged = !isSelf && targetUser.role !== 'ADMIN';
                   return (
                     <tr key={targetUser._id} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ padding: '0.75rem' }}>
@@ -139,9 +141,7 @@ export default function UsersPage() {
                         <small style={{ color: '#666' }}>{targetUser.email}</small>
                       </td>
                       <td style={{ padding: '0.75rem' }}>
-                        {isSelf ? (
-                          <span style={{ fontWeight: 'bold' }}>{targetUser.role}</span>
-                        ) : (
+                        {roleCanBeChanged ? (
                           <select
                             value={targetUser.role}
                             onChange={(e) => handleChangeRole(targetUser, e.target.value)}
@@ -149,8 +149,9 @@ export default function UsersPage() {
                           >
                             <option value="CUSTOMER">CUSTOMER</option>
                             <option value="STAFF">STAFF</option>
-                            <option value="ADMIN">ADMIN</option>
                           </select>
+                        ) : (
+                          <span style={{ fontWeight: 'bold' }}>{targetUser.role}</span>
                         )}
                       </td>
                       <td style={{ padding: '0.75rem' }}>

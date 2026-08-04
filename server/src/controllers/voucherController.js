@@ -1,4 +1,5 @@
 import { calculatePricing, getCartDetails, getValidVoucher } from '../services/pricingService.js';
+import Voucher from '../models/Voucher.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -20,4 +21,15 @@ export const validateVoucher = asyncHandler(async (req, res) => {
       pricing,
     },
   });
+});
+
+export const getAvailableVouchers = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const vouchers = await Voucher.find({
+    isActive: true,
+    startAt: { $lte: now },
+    endAt: { $gte: now },
+    $expr: { $lt: ['$usedCount', '$usageLimit'] },
+  }).sort({ endAt: 1, value: -1 });
+  res.json({ data: vouchers });
 });

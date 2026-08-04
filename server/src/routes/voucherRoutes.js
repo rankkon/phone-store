@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { validateVoucher } from '../controllers/voucherController.js';
-import { allowRoles, requireAuth } from '../middlewares/auth.js';
+import { getAvailableVouchers, validateVoucher } from '../controllers/voucherController.js';
+import { allowRoles, requireAuth, requireVerifiedEmail } from '../middlewares/auth.js';
 
 const router = Router();
-router.post('/validate', requireAuth, allowRoles('CUSTOMER'), validateVoucher);
+router.get('/available', requireAuth, allowRoles('CUSTOMER'), requireVerifiedEmail, getAvailableVouchers);
+router.post('/validate', requireAuth, allowRoles('CUSTOMER'), requireVerifiedEmail, validateVoucher);
 export default router;

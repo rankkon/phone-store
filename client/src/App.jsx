@@ -9,8 +9,12 @@ import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage';
 import DashboardPage from './pages/admin/DashboardPage';
 import UsersPage from './pages/admin/UsersPage';
+import VouchersPage from './pages/admin/VouchersPage';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
 
 function AdminIndexRedirect() {
   const { user } = useAuth();
@@ -28,6 +32,7 @@ import OrderSuccessPage from './pages/customer/OrderSuccessPage';
 import ProductDetailPage from './pages/customer/ProductDetailPage';
 import ProductListPage from './pages/customer/ProductListPage';
 import ProfilePage from './pages/customer/ProfilePage';
+import MyVouchersPage from './pages/customer/MyVouchersPage';
 import HomePage from './pages/HomePage';
 
 export default function App() {
@@ -36,7 +41,10 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="login" element={<LoginPage />} />
+        <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="register" element={<RegisterPage />} />
+        <Route path="about" element={<AboutPage />} />
+        <Route path="contact" element={<ContactPage />} />
         <Route path="products" element={<ProductListPage />} />
         <Route path="products/:slug" element={<ProductDetailPage />} />
         <Route element={<ProtectedRoute />}><Route path="profile" element={<ProfilePage />} /></Route>
@@ -46,6 +54,7 @@ export default function App() {
           <Route path="orders" element={<OrdersPage />} />
           <Route path="orders/success/:orderCode" element={<OrderSuccessPage />} />
           <Route path="orders/:orderCode" element={<OrderDetailPage />} />
+          <Route path="my-vouchers" element={<MyVouchersPage />} />
         </Route>
         <Route element={<ProtectedRoute roles={['ADMIN', 'STAFF']} />}>
           <Route path="admin" element={<AdminLayout />}>
@@ -59,6 +68,7 @@ export default function App() {
               <Route path="products/new" element={<ProductFormPage />} />
               <Route path="products/:id/edit" element={<ProductFormPage />} />
               <Route path="brands" element={<BrandsPage />} />
+              <Route path="vouchers" element={<VouchersPage />} />
             </Route>
           </Route>
         </Route>

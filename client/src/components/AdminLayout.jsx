@@ -12,6 +12,7 @@ export default function AdminLayout() {
             <NavLink to="/admin/dashboard">Tổng quan</NavLink>
             <NavLink to="/admin/products">Sản phẩm</NavLink>
             <NavLink to="/admin/brands">Hãng điện thoại</NavLink>
+            <NavLink to="/admin/vouchers">Voucher</NavLink>
           </>
         )}
         <NavLink to="/admin/orders">Đơn hàng</NavLink>

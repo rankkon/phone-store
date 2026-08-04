@@ -19,6 +19,10 @@ const userSchema = new mongoose.Schema({
   avatarUrl: { type: String, trim: true, default: '' },
   role: { type: String, enum: ['CUSTOMER', 'STAFF', 'ADMIN'], default: 'CUSTOMER' },
   status: { type: String, enum: ['ACTIVE', 'BLOCKED'], default: 'ACTIVE' },
+  isEmailVerified: { type: Boolean, default: false },
+  emailVerifiedAt: { type: Date, default: null },
+  refreshTokenHash: { type: String, default: '', select: false },
+  refreshTokenExpiresAt: { type: Date, default: null, select: false },
 }, { timestamps: true });
 
 userSchema.methods.comparePassword = function comparePassword(password) {
@@ -32,6 +36,8 @@ userSchema.statics.hashPassword = function hashPassword(password) {
 userSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     delete returnedObject.passwordHash;
+    delete returnedObject.refreshTokenHash;
+    delete returnedObject.refreshTokenExpiresAt;
     delete returnedObject.__v;
     return returnedObject;
   },

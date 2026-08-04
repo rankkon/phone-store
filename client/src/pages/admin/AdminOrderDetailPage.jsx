@@ -75,6 +75,14 @@ export default function AdminOrderDetailPage() {
   if (!order && !error) return <LoadingScreen />;
   if (!order) return <section><FlashMessage type="error">{error}</FlashMessage><Link className="button" to="/admin/orders">Về danh sách đơn</Link></section>;
 
+  const paymentStatusLabel = order.payment.status === 'PAID'
+    ? 'Đã thanh toán'
+    : order.payment.status === 'FAILED'
+      ? 'Thanh toán thất bại'
+      : order.payment.method === 'COD'
+        ? 'Chưa thanh toán (thu COD)'
+        : 'Đang chờ thanh toán';
+
   // Xác định các nút hành động khả thi dựa trên trạng thái hiện tại
   const renderActionButtons = () => {
     if (updating) return <span>Đang xử lý...</span>;
@@ -195,8 +203,8 @@ export default function AdminOrderDetailPage() {
           <hr style={{ border: 0, borderTop: '1px solid #eee', margin: '1rem 0' }} />
           <p style={{ margin: 0 }}>
             <strong>Phương thức:</strong> {order.payment.method} <br />
-            <strong>Thanh toán:</strong> <span style={{ fontWeight: 'bold', color: order.payment.status === 'PAID' ? '#137333' : '#c5221f' }}>
-              {order.payment.status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán (Thu COD)'}
+            <strong>Thanh toán:</strong> <span style={{ fontWeight: 'bold', color: order.payment.status === 'PAID' ? '#137333' : order.payment.status === 'FAILED' ? '#c5221f' : '#b06000' }}>
+              {paymentStatusLabel}
             </span>
             {order.payment.paidAt && <span> ({formatDate(order.payment.paidAt)})</span>}
           </p>

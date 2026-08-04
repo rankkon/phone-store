@@ -52,9 +52,10 @@ async function createOrder(userId, { shippingAddress, note, voucherCode }, sessi
     storage: item.variant.storage,
     color: item.variant.color,
     imageUrl: item.product.imageUrl,
-    unitPrice: item.variant.price,
+    unitCost: item.variant.costPrice,
+    unitPrice: item.variant.salePrice,
     quantity: item.quantity,
-    lineTotal: item.variant.price * item.quantity,
+    lineTotal: item.variant.salePrice * item.quantity,
   }));
 
   if (voucher) {

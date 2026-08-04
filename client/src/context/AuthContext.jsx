@@ -14,15 +14,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const hydrateSession = useCallback(async () => {
-    if (!localStorage.getItem(TOKEN_KEY)) {
-      setLoading(false);
-      return;
-    }
+    const accessToken = localStorage.getItem(TOKEN_KEY);
     try {
-      const response = await authApi.getMe();
-      setUser(response.data.data);
+      if (accessToken) {
+        const response = await authApi.getMe();
+        setUser(response.data.data);
+      } else {
+        const response = await authApi.refresh();
+        localStorage.setItem(TOKEN_KEY, response.data.data.token);
+        setUser(response.data.data.user);
+      }
     } catch {
-      clearSession();
+      if (!accessToken) { clearSession(); return; }
+      try {
+        const response = await authApi.refresh();
+        localStorage.setItem(TOKEN_KEY, response.data.data.token);
+        setUser(response.data.data.user);
+      } catch { clearSession(); }
     } finally {
       setLoading(false);
     }
@@ -35,14 +43,22 @@ export function AuthProvider({ children }) {
     setUser(payload.user);
   }, []);
 
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      clearSession();
+    }
+  }, [clearSession]);
+
   const value = useMemo(() => ({
     user,
     loading,
     login: startSession,
-    logout: clearSession,
+    logout,
     refreshUser: hydrateSession,
     setUser,
-  }), [user, loading, startSession, clearSession, hydrateSession]);
+  }), [user, loading, startSession, logout, hydrateSession]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

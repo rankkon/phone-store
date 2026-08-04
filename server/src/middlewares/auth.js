@@ -15,6 +15,9 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   } catch {
     throw new ApiError(401, 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
   }
+  if (payload.tokenType && payload.tokenType !== 'access') {
+    throw new ApiError(401, 'Access token không hợp lệ.');
+  }
 
   const user = await User.findById(payload.sub);
   if (!user) throw new ApiError(401, 'Tài khoản không còn tồn tại.');
@@ -31,4 +34,11 @@ export function allowRoles(...roles) {
     }
     return next();
   };
+}
+
+export function requireVerifiedEmail(req, res, next) {
+  if (!req.user?.isEmailVerified) {
+    return next(new ApiError(403, 'Vui lòng xác minh email trong hồ sơ trước khi thực hiện thao tác này.'));
+  }
+  return next();
 }

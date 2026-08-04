@@ -5,7 +5,9 @@ import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
 
-const blankVariant = () => ({ sku: '', ram: '', storage: '', color: '', colorHex: '#111827', price: '', compareAtPrice: '', stock: 0, isActive: true });
+const blankVariant = () => ({ sku: '', ram: '', storage: '', color: '', costPrice: '', salePrice: '', stock: 0, isActive: true });
+const ramPresets = ['4GB', '6GB', '8GB', '12GB', '16GB', '18GB', '24GB'];
+const storagePresets = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
 const initialForm = () => ({
   name: '', modelCode: '', brandId: '', description: '', isActive: true,
   specifications: { chip: '', battery: '', screen: '', rearCamera: '', frontCamera: '', operatingSystem: '' },
@@ -37,7 +39,7 @@ export default function ProductFormPage() {
           setForm({
             name: product.name, modelCode: product.modelCode, brandId: product.brandId?._id || product.brandId, description: product.description || '', isActive: product.isActive,
             specifications: { chip: '', battery: '', screen: '', rearCamera: '', frontCamera: '', operatingSystem: '', ...product.specifications },
-            variants: product.variants.map((variant) => ({ ...variant, compareAtPrice: variant.compareAtPrice ?? '' })),
+            variants: product.variants.map((variant) => ({ ...variant })),
           });
           setImages(product.images || []);
         }
@@ -66,8 +68,7 @@ export default function ProductFormPage() {
           delete variant._id;
           return {
             ...variant,
-            price: Number(variant.price), stock: Number(variant.stock),
-            compareAtPrice: variant.compareAtPrice === '' ? null : Number(variant.compareAtPrice),
+            costPrice: Number(variant.costPrice), salePrice: Number(variant.salePrice), stock: Number(variant.stock),
           };
         }),
       };
@@ -96,6 +97,8 @@ export default function ProductFormPage() {
       <div className="page-heading"><div><p className="eyebrow">CATALOG</p><h1>{isEditing ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm'}</h1></div><Link className="button button--ghost" to="/admin/products">← Danh sách sản phẩm</Link></div>
       <FlashMessage type="success">{message}</FlashMessage><FlashMessage type="error">{error}</FlashMessage>
       <form className="product-form" onSubmit={handleSubmit}>
+        <datalist id="ram-presets">{ramPresets.map((value) => <option key={value} value={value} />)}</datalist>
+        <datalist id="storage-presets">{storagePresets.map((value) => <option key={value} value={value} />)}</datalist>
         <section className="panel form-stack">
           <h2>Thông tin cơ bản</h2>
           <div className="two-columns">
@@ -113,15 +116,14 @@ export default function ProductFormPage() {
           </div>
         </section>
         <section className="panel form-stack">
-          <div className="section-heading"><div><h2>Biến thể</h2><p>Mỗi SKU là duy nhất; giá và tồn kho phải nằm ở biến thể.</p></div><button type="button" className="button button--secondary" onClick={() => setForm({ ...form, variants: [...form.variants, blankVariant()] })}>+ Thêm biến thể</button></div>
+          <div className="section-heading"><div><h2>Biến thể</h2><p>Mỗi SKU là duy nhất; giá nhập, giá bán và tồn kho được quản lý theo từng biến thể.</p></div><button type="button" className="button button--secondary" onClick={() => setForm({ ...form, variants: [...form.variants, blankVariant()] })}>+ Thêm biến thể</button></div>
           {form.variants.map((variant, index) => <fieldset className="variant-card" key={variant._id || index}><legend>Biến thể {index + 1}</legend><div className="variant-grid">
             <label>SKU<input value={variant.sku} onChange={(event) => updateVariant(index, 'sku', event.target.value)} required /></label>
-            <label>RAM<input placeholder="Ví dụ: 8GB" value={variant.ram} onChange={(event) => updateVariant(index, 'ram', event.target.value)} required /></label>
-            <label>Bộ nhớ trong<input placeholder="Ví dụ: 256GB" value={variant.storage} onChange={(event) => updateVariant(index, 'storage', event.target.value)} required /></label>
+            <label>RAM<input list="ram-presets" placeholder="Chọn hoặc nhập, ví dụ: 8GB" value={variant.ram} onChange={(event) => updateVariant(index, 'ram', event.target.value)} required /></label>
+            <label>Bộ nhớ trong<input list="storage-presets" placeholder="Chọn hoặc nhập, ví dụ: 256GB" value={variant.storage} onChange={(event) => updateVariant(index, 'storage', event.target.value)} required /></label>
             <label>Màu sắc<input value={variant.color} onChange={(event) => updateVariant(index, 'color', event.target.value)} required /></label>
-            <label>Mã màu<input type="color" value={variant.colorHex || '#111827'} onChange={(event) => updateVariant(index, 'colorHex', event.target.value)} /></label>
-            <label>Giá (VND)<input type="number" min="0" value={variant.price} onChange={(event) => updateVariant(index, 'price', event.target.value)} required /></label>
-            <label>Giá cũ (VND)<input type="number" min="0" value={variant.compareAtPrice} onChange={(event) => updateVariant(index, 'compareAtPrice', event.target.value)} /></label>
+            <label>Giá nhập (VND)<input type="number" min="0" value={variant.costPrice} onChange={(event) => updateVariant(index, 'costPrice', event.target.value)} required /></label>
+            <label>Giá bán (VND)<input type="number" min="0" value={variant.salePrice} onChange={(event) => updateVariant(index, 'salePrice', event.target.value)} required /></label>
             <label>Tồn kho<input type="number" min="0" step="1" value={variant.stock} onChange={(event) => updateVariant(index, 'stock', event.target.value)} required /></label>
             <label className="checkbox-label"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => updateVariant(index, 'isActive', event.target.checked)} />Đang bán</label>
           </div>{form.variants.length > 1 && <button type="button" className="danger-link" onClick={() => removeVariant(index)}>Xóa biến thể này</button>}</fieldset>)}

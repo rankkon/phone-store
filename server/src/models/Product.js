@@ -12,9 +12,8 @@ const variantSchema = new mongoose.Schema({
   ram: { type: String, required: [true, 'RAM là bắt buộc.'], trim: true },
   storage: { type: String, required: [true, 'Bộ nhớ trong là bắt buộc.'], trim: true },
   color: { type: String, required: [true, 'Màu sắc là bắt buộc.'], trim: true },
-  colorHex: { type: String, trim: true, default: '' },
-  price: { type: Number, required: [true, 'Giá là bắt buộc.'], min: [0, 'Giá không được âm.'] },
-  compareAtPrice: { type: Number, min: [0, 'Giá cũ không được âm.'], default: null },
+  costPrice: { type: Number, required: [true, 'Giá nhập là bắt buộc.'], min: [0, 'Giá nhập không được âm.'] },
+  salePrice: { type: Number, required: [true, 'Giá bán là bắt buộc.'], min: [0, 'Giá bán không được âm.'] },
   stock: { type: Number, required: [true, 'Tồn kho là bắt buộc.'], min: [0, 'Tồn kho không được âm.'], validate: { validator: Number.isInteger, message: 'Tồn kho phải là số nguyên.' } },
   isActive: { type: Boolean, default: true },
 }, { timestamps: false });
@@ -47,6 +46,6 @@ productSchema.pre('validate', function setSlug(next) {
   next();
 });
 
-productSchema.index({ 'variants.sku': 1 });
+productSchema.index({ 'variants.sku': 1 }, { unique: true });
 
 export default mongoose.model('Product', productSchema);

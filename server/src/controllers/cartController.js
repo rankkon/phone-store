@@ -12,9 +12,14 @@ function parseQuantity(value) {
 
 async function sendCart(res, userId, message) {
   const cartData = await getCartDetails(userId);
+  const items = cartData.items.map(({ variant, ...item }) => {
+    if (!variant) return { ...item, variant: null };
+    const { costPrice, ...publicVariant } = variant;
+    return { ...item, variant: publicVariant };
+  });
   res.json({
     ...(message ? { message } : {}),
-    data: { items: cartData.items, pricing: { subtotal: cartData.subtotal } },
+    data: { items, pricing: { subtotal: cartData.subtotal } },
   });
 }
 

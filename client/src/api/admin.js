@@ -34,3 +34,11 @@ export const dashboardApi = {
   getLowStock: () => api.get('/admin/dashboard/low-stock'),
 };
 
+export const voucherAdminApi = {
+  list: () => api.get('/admin/vouchers'),
+  create: (payload) => api.post('/admin/vouchers', payload),
+  update: (id, payload) => api.patch(`/admin/vouchers/${id}`, payload),
+  setStatus: (id, isActive) => api.patch(`/admin/vouchers/${id}/status`, { isActive }),
+  remove: (id) => api.delete(`/admin/vouchers/${id}`),
+};
+

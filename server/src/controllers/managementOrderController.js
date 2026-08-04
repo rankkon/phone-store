@@ -4,7 +4,15 @@ import Product from '../models/Product.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const ALLOWED_STATUSES = ['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPING', 'COMPLETED', 'CANCEL_REQUESTED', 'CANCELLED'];
+const STATUS_TRANSITIONS = {
+  PENDING: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['PREPARING', 'CANCELLED'],
+  PREPARING: ['SHIPPING', 'CANCELLED'],
+  SHIPPING: ['COMPLETED', 'CANCELLED'],
+  CANCEL_REQUESTED: [],
+  COMPLETED: [],
+  CANCELLED: [],
+};
 
 // Kiểm tra xem DB có hỗ trợ transaction không
 async function transactionSupported() {
@@ -80,7 +88,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
 // PATCH /api/management/orders/:id/status
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
-  if (!status || !ALLOWED_STATUSES.includes(status)) {
+  if (!status || !Object.hasOwn(STATUS_TRANSITIONS, status)) {
     throw new ApiError(400, 'Trạng thái cập nhật không hợp lệ.');
   }
 
@@ -91,28 +99,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, `Đơn hàng đã ở trạng thái ${status} rồi.`);
   }
 
-  // Khai báo logic chuyển đổi trạng thái nghiêm ngặt
   const currentStatus = order.status;
-  let isValidTransition = false;
-
-  if (currentStatus === 'PENDING') {
-    isValidTransition = ['CONFIRMED', 'CANCELLED', 'CANCEL_REQUESTED'].includes(status);
-  } else if (currentStatus === 'CONFIRMED') {
-    isValidTransition = ['PREPARING', 'CANCELLED', 'CANCEL_REQUESTED'].includes(status);
-  } else if (currentStatus === 'PREPARING') {
-    isValidTransition = ['SHIPPING', 'CANCELLED'].includes(status);
-  } else if (currentStatus === 'SHIPPING') {
-    isValidTransition = ['COMPLETED', 'CANCELLED'].includes(status);
-  } else if (currentStatus === 'CANCEL_REQUESTED') {
-    isValidTransition = ['CANCELLED'].includes(status); // Cần duyệt hoặc từ chối qua API riêng, hoặc trực tiếp hủy
-  }
-
-  if (!isValidTransition && currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED') {
+  if (!STATUS_TRANSITIONS[currentStatus]?.includes(status)) {
     throw new ApiError(400, `Không thể chuyển trạng thái từ ${currentStatus} sang ${status}.`);
-  }
-
-  if (currentStatus === 'CANCELLED' || currentStatus === 'COMPLETED') {
-    throw new ApiError(400, 'Không thể thay đổi trạng thái của đơn hàng đã hoàn thành hoặc đã hủy.');
   }
 
   const executeUpdate = async (session) => {

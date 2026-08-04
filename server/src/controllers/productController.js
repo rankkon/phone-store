@@ -13,10 +13,8 @@ function parseVariant(rawVariant) {
     ram: rawVariant.ram?.trim(),
     storage: rawVariant.storage?.trim(),
     color: rawVariant.color?.trim(),
-    colorHex: rawVariant.colorHex?.trim() || '',
-    price: Number(rawVariant.price),
-    compareAtPrice: rawVariant.compareAtPrice === '' || rawVariant.compareAtPrice === null || rawVariant.compareAtPrice === undefined
-      ? null : Number(rawVariant.compareAtPrice),
+    costPrice: Number(rawVariant.costPrice),
+    salePrice: Number(rawVariant.salePrice),
     stock: Number(rawVariant.stock),
     isActive: rawVariant.isActive !== false,
   };
@@ -24,10 +22,8 @@ function parseVariant(rawVariant) {
   if (!variant.sku || !variant.ram || !variant.storage || !variant.color) {
     throw new ApiError(400, 'Mỗi biến thể cần SKU, RAM, bộ nhớ trong và màu sắc.');
   }
-  if (!Number.isFinite(variant.price) || variant.price < 0) throw new ApiError(400, 'Giá biến thể phải là số không âm.');
-  if (variant.compareAtPrice !== null && (!Number.isFinite(variant.compareAtPrice) || variant.compareAtPrice < 0)) {
-    throw new ApiError(400, 'Giá cũ phải là số không âm.');
-  }
+  if (!Number.isFinite(variant.costPrice) || variant.costPrice < 0) throw new ApiError(400, 'Giá nhập phải là số không âm.');
+  if (!Number.isFinite(variant.salePrice) || variant.salePrice < 0) throw new ApiError(400, 'Giá bán phải là số không âm.');
   if (!Number.isInteger(variant.stock) || variant.stock < 0) throw new ApiError(400, 'Tồn kho phải là số nguyên không âm.');
   return variant;
 }
@@ -87,29 +83,42 @@ function parsePrice(value, label) {
   return parsed;
 }
 
-function getFilteredVariants(variants, query) {
+function getVariantFilterExpression(query) {
   const minPrice = parsePrice(query.minPrice, 'Giá tối thiểu');
   const maxPrice = parsePrice(query.maxPrice, 'Giá tối đa');
   if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
     throw new ApiError(400, 'Giá tối thiểu không được lớn hơn giá tối đa.');
   }
   const onlyInStock = query.inStock === 'true';
-  return variants.filter((variant) => (
-    variant.isActive
-    && (!query.ram || variant.ram === query.ram)
-    && (!query.storage || variant.storage === query.storage)
-    && (!query.color || variant.color === query.color)
-    && (minPrice === undefined || variant.price >= minPrice)
-    && (maxPrice === undefined || variant.price <= maxPrice)
-    && (!onlyInStock || variant.stock > 0)
-  ));
+  const conditions = [{ $eq: ['$$variant.isActive', true] }];
+  if (query.ram) conditions.push({ $eq: ['$$variant.ram', query.ram] });
+  if (query.storage) conditions.push({ $eq: ['$$variant.storage', query.storage] });
+  if (query.color) conditions.push({ $eq: ['$$variant.color', query.color] });
+  if (minPrice !== undefined) conditions.push({ $gte: ['$$variant.salePrice', minPrice] });
+  if (maxPrice !== undefined) conditions.push({ $lte: ['$$variant.salePrice', maxPrice] });
+  if (onlyInStock) conditions.push({ $gt: ['$$variant.stock', 0] });
+  return { $and: conditions };
 }
 
-function publicProduct(product, brand) {
+function getMatchingVariantStages(variantExpression) {
+  return [
+    { $set: { matchingVariants: { $filter: { input: '$variants', as: 'variant', cond: variantExpression } } } },
+    { $match: { 'matchingVariants.0': { $exists: true } } },
+  ];
+}
+
+function publicProduct(product, brand, variants) {
+  const serializedProduct = product.toObject ? product.toObject() : product;
+  const { variants: allVariants, matchingVariants, lowestSalePrice, ...productFields } = serializedProduct;
+  const visibleVariants = variants || allVariants.filter((variant) => variant.isActive);
   return {
-    ...product.toObject(),
+    ...productFields,
     brandId: { _id: brand._id, name: brand.name, slug: brand.slug, logoUrl: brand.logoUrl },
-    variants: product.variants.filter((variant) => variant.isActive),
+    variants: visibleVariants.map((variant) => {
+      const plainVariant = variant.toObject ? variant.toObject() : variant;
+      const { costPrice, ...publicVariant } = plainVariant;
+      return publicVariant;
+    }),
   };
 }
 
@@ -121,27 +130,47 @@ export const getPublicProducts = asyncHandler(async (req, res) => {
     ? brands.find((brand) => brand.slug === req.query.brand || brand._id.toString() === req.query.brand)
     : null;
   if (req.query.brand && !selectedBrand) {
-    return res.json({ data: [], meta: { page, limit, total: 0, totalPages: 1 }, filters: { brands } });
+    return res.json({ data: [], meta: { page, limit, total: 0, totalPages: 1 }, filters: { brands, ram: [], storage: [], colors: [] } });
   }
 
   const allowedBrandIds = selectedBrand ? [selectedBrand._id] : brands.map((brand) => brand._id);
   const brandMap = new Map(brands.map((brand) => [brand._id.toString(), brand]));
-  const products = await Product.find({ isActive: true, brandId: { $in: allowedBrandIds } }).sort('-createdAt');
+  const productMatch = { isActive: true, brandId: { $in: allowedBrandIds } };
   const search = req.query.search?.trim().toLowerCase();
-  const matches = products
-    .filter((product) => !search || `${product.name} ${product.modelCode}`.toLowerCase().includes(search))
-    .map((product) => ({ product, matchingVariants: getFilteredVariants(product.variants, req.query) }))
-    .filter(({ matchingVariants }) => matchingVariants.length > 0);
+  if (search) {
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    productMatch.$or = [{ name: { $regex: escapedSearch, $options: 'i' } }, { modelCode: { $regex: escapedSearch, $options: 'i' } }];
+  }
+  const variantExpression = getVariantFilterExpression(req.query);
 
   const sort = req.query.sort || 'newest';
-  if (sort === 'price_asc') matches.sort((a, b) => Math.min(...a.matchingVariants.map((variant) => variant.price)) - Math.min(...b.matchingVariants.map((variant) => variant.price)));
-  if (sort === 'price_desc') matches.sort((a, b) => Math.min(...b.matchingVariants.map((variant) => variant.price)) - Math.min(...a.matchingVariants.map((variant) => variant.price)));
   if (!['newest', 'price_asc', 'price_desc'].includes(sort)) throw new ApiError(400, 'Kiểu sắp xếp không hợp lệ.');
+  const sortStage = sort === 'newest'
+    ? { createdAt: -1 }
+    : { lowestSalePrice: sort === 'price_asc' ? 1 : -1, createdAt: -1 };
 
-  const total = matches.length;
-  const data = matches.slice((page - 1) * limit, page * limit)
-    .map(({ product }) => publicProduct(product, brandMap.get(product.brandId.toString())));
-  res.json({ data, meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }, filters: { brands } });
+  const [products, totalResult, filterOptionResult] = await Promise.all([
+    Product.aggregate([
+      { $match: productMatch },
+      ...getMatchingVariantStages(variantExpression),
+      { $set: { lowestSalePrice: { $min: '$matchingVariants.salePrice' } } },
+      { $sort: sortStage },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+    ]),
+    Product.aggregate([{ $match: productMatch }, ...getMatchingVariantStages(variantExpression), { $count: 'total' }]),
+    Product.aggregate([
+      { $match: { isActive: true, brandId: { $in: allowedBrandIds } } },
+      { $unwind: '$variants' },
+      { $match: { 'variants.isActive': true } },
+      { $group: { _id: null, ram: { $addToSet: '$variants.ram' }, storage: { $addToSet: '$variants.storage' }, colors: { $addToSet: '$variants.color' } } },
+    ]),
+  ]);
+  const filterValues = filterOptionResult[0] || { ram: [], storage: [], colors: [] };
+  const variantFilterOptions = Object.fromEntries(Object.entries(filterValues).filter(([key]) => key !== '_id').map(([key, values]) => [key, values.sort((a, b) => a.localeCompare(b, 'vi'))]));
+  const total = totalResult[0]?.total || 0;
+  const data = products.map((product) => publicProduct(product, brandMap.get(product.brandId.toString()), product.matchingVariants));
+  res.json({ data, meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }, filters: { brands, ...variantFilterOptions } });
 });
 
 export const getPublicProductBySlug = asyncHandler(async (req, res) => {

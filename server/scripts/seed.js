@@ -8,7 +8,7 @@ import { ensureDemoAccounts } from '../src/services/demoAccountService.js';
 async function seed() {
   await connectDatabase();
 
-  await ensureDemoAccounts();
+  const demoAccountResult = await ensureDemoAccounts();
 
   let apple = await Brand.findOne({ name: 'Apple' });
   if (!apple) apple = await Brand.create({ name: 'Apple' });
@@ -21,8 +21,8 @@ async function seed() {
       description: 'Hiệu năng mạnh mẽ, camera chuyên nghiệp và thiết kế titan cao cấp.',
       specifications: { chip: 'Apple A18 Pro', battery: '3582 mAh', screen: '6.3 inch OLED', rearCamera: '48 MP', frontCamera: '12 MP', operatingSystem: 'iOS 18' },
       variants: [
-        { sku: 'IP16P-128-BLK', ram: '8GB', storage: '128GB', color: 'Titan Đen', colorHex: '#242424', price: 28990000, stock: 12 },
-        { sku: 'IP16P-256-NT', ram: '8GB', storage: '256GB', color: 'Titan Tự Nhiên', colorHex: '#c8c2ba', price: 31990000, stock: 8 },
+        { sku: 'IP16P-128-BLK', ram: '8GB', storage: '128GB', color: 'Titan Đen', costPrice: 26090000, salePrice: 28990000, stock: 12 },
+        { sku: 'IP16P-256-NT', ram: '8GB', storage: '256GB', color: 'Titan Tự Nhiên', costPrice: 28710000, salePrice: 31990000, stock: 8 },
       ],
     },
     {
@@ -30,7 +30,7 @@ async function seed() {
       description: 'Thiết kế nhỏ gọn, hiệu năng cao và màn hình AMOLED sắc nét.',
       specifications: { chip: 'Snapdragon 8 Elite', battery: '4000 mAh', screen: '6.2 inch AMOLED', rearCamera: '50 MP', frontCamera: '12 MP', operatingSystem: 'Android 15' },
       variants: [
-        { sku: 'S25-256-BLU', ram: '12GB', storage: '256GB', color: 'Xanh Navy', colorHex: '#27364d', price: 22990000, stock: 15 },
+        { sku: 'S25-256-BLU', ram: '12GB', storage: '256GB', color: 'Xanh Navy', costPrice: 20690000, salePrice: 22990000, stock: 15 },
       ],
     },
   ];
@@ -46,7 +46,7 @@ async function seed() {
     });
   }
 
-  console.log('Seed completed. Demo accounts created when they did not already exist.');
+  console.log('Seed completed. Demo accounts synchronized.', demoAccountResult);
   process.exit(0);
 }
 

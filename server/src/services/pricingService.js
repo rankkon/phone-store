@@ -55,9 +55,10 @@ export async function getCartDetails(userId, session) {
       variantId: item.variantId,
       quantity: item.quantity,
       product: product ? { _id: product._id, name: product.name, slug: product.slug, modelCode: product.modelCode, imageUrl: product.images[0]?.url || '' } : null,
-      variant: variant ? { _id: variant._id, sku: variant.sku, ram: variant.ram, storage: variant.storage, color: variant.color, colorHex: variant.colorHex, price: variant.price, stock: variant.stock, isActive: variant.isActive } : null,
+      // costPrice chỉ phục vụ tạo snapshot đơn hàng ở backend, không được gửi ra API giỏ hàng.
+      variant: variant ? { _id: variant._id, sku: variant.sku, ram: variant.ram, storage: variant.storage, color: variant.color, costPrice: variant.costPrice, salePrice: variant.salePrice, stock: variant.stock, isActive: variant.isActive } : null,
       available,
-      lineTotal: available ? variant.price * item.quantity : 0,
+      lineTotal: available ? variant.salePrice * item.quantity : 0,
     };
   });
 

@@ -11,10 +11,12 @@ export default function OrderDetailPage() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const paymentStatus = searchParams.get('payment');
+  const paymentCode = searchParams.get('code');
 
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [canceling, setCanceling] = useState(false);
+  const [retryingPayment, setRetryingPayment] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelSuccess, setCancelSuccess] = useState('');
 
@@ -24,10 +26,9 @@ export default function OrderDetailPage() {
     if (paymentStatus === 'success') {
       setCancelSuccess('Thanh toán trực tuyến qua VNPay thành công!');
     } else if (paymentStatus === 'fail') {
-      const code = searchParams.get('code');
-      setCancelError(`Thanh toán thất bại hoặc đã bị hủy. ${code ? `(Mã lỗi VNPay: ${code})` : ''}`);
+      setCancelError(`Thanh toán thất bại hoặc đã bị hủy. ${paymentCode ? `(Mã lỗi VNPay: ${paymentCode})` : ''}`);
     }
-  }, [orderCode, paymentStatus]);
+  }, [orderCode, paymentStatus, paymentCode]);
 
   const handleCancelRequest = () => {
     if (!window.confirm('Bạn có chắc chắn muốn gửi yêu cầu hủy đơn hàng này không?')) return;
@@ -43,6 +44,21 @@ export default function OrderDetailPage() {
       .catch((err) => {
         setCancelError(getApiError(err));
         setCanceling(false);
+      });
+  };
+
+  const handleRetryVnpayPayment = () => {
+    setRetryingPayment(true);
+    setCancelError('');
+    orderApi.retryVnpayOrder(order.orderCode)
+      .then((response) => {
+        const { paymentUrl } = response.data.data;
+        if (!paymentUrl) throw new Error('Không nhận được liên kết thanh toán VNPay.');
+        window.location.assign(paymentUrl);
+      })
+      .catch((requestError) => {
+        setCancelError(getApiError(requestError));
+        setRetryingPayment(false);
       });
   };
 
@@ -92,7 +108,23 @@ export default function OrderDetailPage() {
           <div><span>Phí vận chuyển</span><strong>{order.pricing.shippingFee === 0 ? 'Miễn phí' : currency.format(order.pricing.shippingFee)}</strong></div>
           <div className="summary-total"><span>Tổng thanh toán</span><strong>{currency.format(order.pricing.total)}</strong></div>
           <hr />
-          <p><strong>COD</strong> · {order.payment.status === 'UNPAID' ? 'Thanh toán khi nhận hàng' : order.payment.status}</p>
+          <p>
+            <strong>{order.payment.method === 'VNPAY' ? 'VNPay' : 'COD'}</strong>
+            {' · '}
+            {order.payment.status === 'PAID'
+              ? 'Đã thanh toán'
+              : order.payment.status === 'FAILED'
+                ? 'Thanh toán thất bại'
+                : order.payment.method === 'COD'
+                  ? 'Thanh toán khi nhận hàng'
+                  : 'Đang chờ thanh toán'}
+          </p>
+
+          {order.payment.method === 'VNPAY' && ['UNPAID', 'PENDING'].includes(order.payment.status) && order.status === 'PENDING' && (
+            <button className="button button--large" onClick={handleRetryVnpayPayment} disabled={retryingPayment} style={{ width: '100%', marginTop: '1rem' }}>
+              {retryingPayment ? 'Đang mở VNPay...' : 'Tiếp tục thanh toán qua VNPay'}
+            </button>
+          )}
 
           {['PENDING', 'CONFIRMED'].includes(order.status) && (
             <div style={{ marginTop: '1.5rem' }}>

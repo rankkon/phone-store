@@ -10,6 +10,7 @@ const orderItemSchema = new mongoose.Schema({
   storage: { type: String, required: true },
   color: { type: String, required: true },
   imageUrl: { type: String, default: '' },
+  unitCost: { type: Number, required: true, min: 0 },
   unitPrice: { type: Number, required: true, min: 0 },
   quantity: { type: Number, required: true, min: 1 },
   lineTotal: { type: Number, required: true, min: 0 },
@@ -40,6 +41,7 @@ const voucherSnapshotSchema = new mongoose.Schema({
 const paymentSchema = new mongoose.Schema({
   method: { type: String, enum: ['COD', 'VNPAY'], required: true, default: 'COD' },
   status: { type: String, enum: ['UNPAID', 'PENDING', 'PAID', 'FAILED'], required: true, default: 'UNPAID' },
+  requestRefs: { type: [String], default: [] },
   transactionRef: { type: String, default: '' },
   paidAt: { type: Date, default: null },
 }, { _id: false });

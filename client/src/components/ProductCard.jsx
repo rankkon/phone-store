@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
 export default function ProductCard({ product }) {
-  const prices = product.variants.map((variant) => variant.price);
+  const prices = product.variants.map((variant) => variant.salePrice);
   const lowestPrice = Math.min(...prices);
   const totalStock = product.variants.reduce((total, variant) => total + variant.stock, 0);
   const image = product.images[0];

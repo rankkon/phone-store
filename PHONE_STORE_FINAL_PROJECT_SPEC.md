@@ -5,6 +5,7 @@
 > **Nhân sự:** Nhóm 2 thành viên.  
 > **Mục đích:** Tài liệu nguồn chính để nhóm và AI agent đọc trước khi thiết kế, viết code hoặc thay đổi project.  
 > **Tài liệu này thay thế bản `AGENT_PROJECT_MASTER_PLAN.md` trước đó nếu có nội dung mâu thuẫn.**
+> **Trạng thái source hiện tại:** Đã có storefront, phân quyền, quản lý catalog/đơn/người dùng/voucher, dashboard, hủy đơn, VNPay, refresh token, OTP email, đánh giá sản phẩm, ưu đãi khả dụng, trang About/Contact và footer. Chưa có ảnh đại diện, test tự động hoặc cấu hình triển khai; gửi email cần SMTP trong `.env`.
 
 ---
 
@@ -37,6 +38,7 @@ Project phải thể hiện được các nội dung quan trọng:
 - Quản lý sản phẩm có nhiều biến thể.
 - Quản lý tồn kho theo từng biến thể.
 - Xử lý giỏ hàng, voucher và đơn hàng.
+- Đánh giá sản phẩm theo số sao và nhận xét.
 - Lưu ảnh sản phẩm bằng Cloudinary.
 - Triển khai website để có thể demo.
 
@@ -90,7 +92,7 @@ cors                  Cho phép frontend gọi backend
 dotenv                Đọc biến môi trường
 multer                Nhận file ảnh upload
 cloudinary            Upload và xóa ảnh trên Cloudinary
-nodemailer            Gửi email quên mật khẩu nếu triển khai
+nodemailer            Gửi mã xác minh và mã bảo mật qua email
 ```
 
 ## 2.3. Dịch vụ triển khai dự kiến
@@ -174,13 +176,13 @@ Chức năng bắt buộc:
 - Xác thực bằng JWT.
 - Không cho tài khoản bị khóa đăng nhập hoặc truy cập API được bảo vệ.
 
-Chức năng nên làm nếu đủ thời gian:
+Đã triển khai thêm:
 
-- Quên mật khẩu.
-- Gửi liên kết đặt lại mật khẩu qua email.
-- Ảnh đại diện.
+- Đăng ký gửi mã OTP 6 số; hồ sơ hiển thị trạng thái email và cho phép xác minh/gửi lại mã.
+- Quên mật khẩu và đổi mật khẩu dùng OTP 6 số gửi qua email, có hiệu lực 10 phút.
+- Refresh token xoay vòng trong cookie `httpOnly`; access token vẫn gửi bằng header JWT.
 
-Để đơn giản, phiên bản bắt buộc chỉ sử dụng JWT access token; không bắt buộc triển khai refresh token.
+Chức năng chưa có: ảnh đại diện. Gửi email cần cấu hình `SMTP_*` ở backend.
 
 ## 4.2. Danh sách sản phẩm
 
@@ -385,8 +387,8 @@ Mỗi sản phẩm có nhiều biến thể theo:
 Mỗi biến thể có:
 
 - SKU duy nhất.
-- Giá.
-- Giá cũ nếu cần.
+- Giá nhập.
+- Giá bán.
 - Số lượng tồn kho.
 - Trạng thái hoạt động.
 
@@ -579,10 +581,10 @@ products
 carts
 vouchers
 orders
-passwordResetTokens
+emailVerificationCodes
 ```
 
-`passwordResetTokens` chỉ cần nếu triển khai quên mật khẩu.
+`emailVerificationCodes` dùng chung cho xác minh email, đổi mật khẩu và quên mật khẩu. Mã được hash, dùng một lần và hết hạn sau 10 phút.
 
 Không cần `auditLogs` trong phạm vi bắt buộc.
 
@@ -686,10 +688,9 @@ Quy tắc:
       ram: String,
       storage: String,
       color: String,
-      colorHex: String,
 
-      price: Number,
-      compareAtPrice: Number,
+      costPrice: Number,
+      salePrice: Number,
       stock: Number,
 
       isActive: Boolean
@@ -828,6 +829,7 @@ Quy tắc:
   payment: {
     method: "COD" | "VNPAY",
     status: "UNPAID" | "PENDING" | "PAID" | "FAILED",
+    requestRefs: [String],
     transactionRef: String,
     paidAt: Date
   },
@@ -861,16 +863,19 @@ Quy tắc:
 
 ---
 
-## 9.7. Password reset token
+## 9.7. Email verification code
 
-Chỉ tạo nếu triển khai quên mật khẩu:
+Đã triển khai cho xác minh email, đổi mật khẩu và quên mật khẩu:
 
 ```js
 {
   _id: ObjectId,
   userId: ObjectId,
-  tokenHash: String,
+  purpose: 'EMAIL_VERIFICATION' | 'PASSWORD_CHANGE' | 'PASSWORD_RESET',
+  codeHash: String,
   expiresAt: Date,
+  sentAt: Date,
+  attempts: Number,
   usedAt: Date,
   createdAt: Date
 }
@@ -937,6 +942,8 @@ PENDING → CANCEL_REQUESTED → CANCELLED
 CONFIRMED → CANCEL_REQUESTED → CANCELLED
 ```
 
+Customer chỉ gửi yêu cầu hủy ở `PENDING` hoặc `CONFIRMED`. Staff/Admin duyệt hoặc từ chối yêu cầu qua API riêng; trong nghiệp vụ vận hành, họ cũng có thể hủy trực tiếp đơn đang ở `PENDING`, `CONFIRMED`, `PREPARING` hoặc `SHIPPING`. Khi hủy phải hoàn kho một lần.
+
 Không được chuyển trạng thái tùy ý.
 
 ## 10.4. Trạng thái hiển thị
@@ -977,6 +984,7 @@ Nếu triển khai:
 - Chỉ tích hợp VNPay.
 - Không thêm MoMo hoặc ZaloPay.
 - Backend tạo URL thanh toán.
+- Đơn chưa thanh toán phải có thể tạo lại URL thanh toán mà không tạo thêm order hoặc trừ stock lần nữa.
 - Backend xác minh chữ ký kết quả.
 - Không tin dữ liệu thanh toán do frontend gửi.
 - Giao dịch thành công cập nhật `PAID`.
@@ -999,11 +1007,15 @@ Base URL:
 POST   /api/auth/register
 POST   /api/auth/login
 POST   /api/auth/logout
+POST   /api/auth/refresh
 GET    /api/auth/me
 PATCH  /api/auth/profile
+POST   /api/auth/email-verification-code
+POST   /api/auth/verify-email
+POST   /api/auth/password-change-code
 PATCH  /api/auth/change-password
-POST   /api/auth/forgot-password      Optional
-POST   /api/auth/reset-password       Optional
+POST   /api/auth/forgot-password
+POST   /api/auth/reset-password
 ```
 
 ## 11.2. Brands
@@ -1072,6 +1084,18 @@ GET    /api/admin/vouchers
 POST   /api/admin/vouchers
 PATCH  /api/admin/vouchers/:id
 PATCH  /api/admin/vouchers/:id/status
+DELETE /api/admin/vouchers/:id
+
+GET    /api/vouchers/available
+```
+
+## 11.5.1. Reviews
+
+```text
+GET    /api/reviews?productId=:id&rating=1..5&page=&limit=
+GET    /api/reviews/mine?productId=:id      Customer
+POST   /api/reviews                         Customer đã xác minh email
+PATCH  /api/reviews/:reviewId               Customer đã xác minh email, chỉ sửa đánh giá của chính mình
 ```
 
 ## 11.6. Order
@@ -1116,6 +1140,7 @@ GET    /api/admin/dashboard/low-stock
 
 ```text
 POST   /api/payments/vnpay/create
+POST   /api/payments/vnpay/orders/:orderCode/retry
 GET    /api/payments/vnpay/return
 ```
 
@@ -1131,7 +1156,7 @@ Danh sách sản phẩm
 Chi tiết sản phẩm
 Đăng ký
 Đăng nhập
-Quên mật khẩu — optional
+Quên mật khẩu và đặt lại mật khẩu
 Hồ sơ cá nhân
 Giỏ hàng
 Đặt hàng
@@ -1152,6 +1177,9 @@ Quản lý đơn — Admin và Staff
 Chi tiết đơn — Admin và Staff
 Quản lý người dùng — Admin
 Quản lý voucher — Admin
+Ưu đãi của tôi — Customer
+Về chúng tôi
+Liên hệ
 ```
 
 ---
@@ -1201,13 +1229,14 @@ SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
 
-VNP_TMN_CODE=
-VNP_HASH_SECRET=
+VNP_TMNCODE=
+VNP_HASHSECRET=
 VNP_URL=
-VNP_RETURN_URL=
+VNP_RETURNURL=
 ```
 
 Các biến SMTP và VNPay chỉ cần điền nếu triển khai chức năng tương ứng.
+Không hard-code hoặc commit `JWT_SECRET`, `VNP_HASHSECRET` hay thông tin truy cập dịch vụ.
 
 ## Frontend `.env.example`
 
@@ -1488,7 +1517,7 @@ Xem sản phẩm
 
 ## P1 — Nên có
 
-- Quên mật khẩu.
+- Quên mật khẩu. — đã hoàn thành bằng OTP email.
 - Yêu cầu hủy đơn.
 - Timeline trạng thái.
 - Biểu đồ doanh thu.
@@ -1499,8 +1528,6 @@ Xem sản phẩm
 
 - Ảnh đại diện.
 - Hoàn trả.
-- Giá cũ.
-- Thống kê nâng cao.
 - Test tự động.
 - Swagger.
 - Animation giao diện.
@@ -1624,16 +1651,16 @@ docs: update project setup guide
 
 ```text
 Admin
-admin@phonestore.local
-Admin@123
+admin@gmail.com
+admin123
 
 Staff
-staff@phonestore.local
-Staff@123
+staff@gmail.com
+staff123
 
 Customer
-customer@phonestore.local
-Customer@123
+customer@gmail.com
+customer123
 ```
 
 Chỉ dùng trong dữ liệu demo.
