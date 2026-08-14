@@ -13,11 +13,7 @@ const lineConfig = {
 const statusLabels = { PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', PREPARING: 'Đang chuẩn bị', SHIPPING: 'Đang giao', COMPLETED: 'Hoàn thành', CANCEL_REQUESTED: 'Yêu cầu hủy', CANCELLED: 'Đã hủy' };
 
 function compactCurrency(value) {
-  const absolute = Math.abs(value);
-  if (absolute >= 1_000_000_000) return `${(value / 1_000_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tỷ`;
-  if (absolute >= 1_000_000) return `${(value / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`;
-  if (absolute >= 1_000) return `${Math.round(value / 1_000).toLocaleString('vi-VN')} nghìn`;
-  return `${Math.round(value).toLocaleString('vi-VN')} đ`;
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
 }
 
 function getNiceMax(value) {
@@ -30,7 +26,7 @@ function FinancialLineChart({ data, enabledLines, onHover }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const width = 960;
   const height = 408;
-  const padding = { top: 28, right: 28, bottom: 76, left: 74 };
+  const padding = { top: 28, right: 28, bottom: 76, left: 110 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const selectedKeys = Object.keys(enabledLines).filter((key) => enabledLines[key]);
@@ -91,16 +87,22 @@ export default function DashboardPage() {
   const [by, setBy] = useState('month');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [source, setSource] = useState('');
   const [enabledLines, setEnabledLines] = useState({ revenue: true, profit: true });
   const [loading, setLoading] = useState(true);
   const [loadingChart, setLoadingChart] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [error, setError] = useState('');
 
-  async function loadChart(nextBy = by, nextStart = startDate, nextEnd = endDate) {
+  async function loadChart(nextBy = by, nextStart = startDate, nextEnd = endDate, nextSource = source) {
     setLoadingChart(true);
     try {
-      const response = await dashboardApi.getRevenue({ by: nextBy, startDate: nextStart || undefined, endDate: nextEnd || undefined });
+      const response = await dashboardApi.getRevenue({ 
+        by: nextBy, 
+        startDate: nextStart || undefined, 
+        endDate: nextEnd || undefined,
+        source: nextSource || undefined
+      });
       setFinancialData(response.data.data);
     } catch (requestError) {
       setError(getApiError(requestError));
@@ -128,14 +130,14 @@ export default function DashboardPage() {
 
   function submitFilter(event) {
     event.preventDefault();
-    loadChart();
+    loadChart(by, startDate, endDate, source);
   }
 
   function changePeriod(nextBy) {
     setBy(nextBy);
     setStartDate('');
     setEndDate('');
-    loadChart(nextBy, '', '');
+    loadChart(nextBy, '', '', source);
   }
 
   const selectedLineKeys = Object.keys(enabledLines).filter((key) => enabledLines[key]);
@@ -145,6 +147,11 @@ export default function DashboardPage() {
   const peak = financialData.reduce((best, item) => item[primaryKey] > (best?.[primaryKey] ?? -1) ? item : best, null);
   const rangeLabel = financialData.length ? `${financialData[0].fullLabel} – ${financialData.at(-1).fullLabel}` : 'Khoảng thời gian đã chọn';
 
+  const totalRevenueAll = financialData.reduce((sum, item) => sum + item.revenue, 0);
+  const totalProfitAll = financialData.reduce((sum, item) => sum + item.profit, 0);
+  const totalCompletedOrders = financialData.reduce((sum, item) => sum + item.orderCount, 0);
+  const avgProfitMarginAll = totalRevenueAll > 0 ? (totalProfitAll / totalRevenueAll) * 100 : 0;
+
   if (loading) return <LoadingScreen />;
   return (
     <div className="admin-page dashboard-page">
@@ -152,19 +159,58 @@ export default function DashboardPage() {
       <FlashMessage type="error">{error}</FlashMessage>
       <div className="dashboard-metrics">
         <article><span>Doanh thu hoàn thành</span><strong>{currency.format(overview.totalRevenue)}</strong></article>
-        <article><span>Lợi nhuận ước tính</span><strong>{currency.format(overview.totalProfit)}</strong></article>
+        <article>
+          <span>Lợi nhuận ước tính</span>
+          <strong>{currency.format(overview.totalProfit)}</strong>
+          <small style={{ display: 'block', fontSize: '0.72rem', color: '#137333', fontWeight: 'bold', marginTop: '2px', background: '#e6f4ea', padding: '1px 5px', borderRadius: '4px', width: 'fit-content' }}>
+            Tỷ suất: {(overview.totalRevenue > 0 ? (overview.totalProfit / overview.totalRevenue) * 100 : 0).toFixed(1)}%
+          </small>
+        </article>
         <article><span>Tổng đơn hàng</span><strong>{overview.totalOrders.toLocaleString('vi-VN')}</strong></article>
         <article><span>Khách hàng</span><strong>{overview.totalUsers.toLocaleString('vi-VN')}</strong></article>
+      </div>
+
+      {/* Tỷ trọng kênh bán hàng (POS vs Online) */}
+      <div className="panel" style={{ background: '#fff', padding: '1.25rem', borderRadius: '8px', border: '1px solid #eee', marginBottom: '1.5rem' }}>
+        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#5f6368', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tỷ trọng kênh bán hàng (Doanh thu thực tế)</h3>
+        {overview.totalRevenue > 0 ? (
+          <>
+            <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: '#e0e0e0', marginBottom: '0.75rem' }}>
+              <div style={{ width: `${(overview.onlineRevenue / overview.totalRevenue) * 100}%`, background: '#2b67e8', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${(overview.offlineRevenue / overview.totalRevenue) * 100}%`, background: '#e37400', transition: 'width 0.3s ease' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 'bold', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#2b67e8' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#2b67e8', borderRadius: '50%' }} />
+                Đơn hàng Online: {currency.format(overview.onlineRevenue)} ({((overview.onlineRevenue / overview.totalRevenue) * 100).toFixed(1)}%) — {overview.onlineCount} đơn
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#e37400' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#e37400', borderRadius: '50%' }} />
+                Tại quầy (POS): {currency.format(overview.offlineRevenue)} ({((overview.offlineRevenue / overview.totalRevenue) * 100).toFixed(1)}%) — {overview.offlineCount} đơn
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: '0.85rem', color: '#666', fontStyle: 'italic' }}>Chưa có doanh thu hoàn thành để tính tỷ trọng.</div>
+        )}
       </div>
 
       <section className="financial-dashboard panel">
         <div className="financial-dashboard__topline">
           <div><p className="eyebrow">BIỂU ĐỒ TÀI CHÍNH</p><h2>{compactCurrency(totalPrimary)}</h2><p>{totalOrders} đơn hoàn thành trong khoảng {rangeLabel}</p></div>
-          <form className="financial-dashboard__filters" onSubmit={submitFilter}>
-            <label>Nhóm theo<select value={by} onChange={(event) => changePeriod(event.target.value)}><option value="day">Theo ngày</option><option value="month">Theo tháng</option><option value="year">Theo năm</option></select></label>
-            <label>Từ ngày<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-            <label>Đến ngày<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
-            <button className="button button--secondary" type="submit" disabled={loadingChart}>{loadingChart ? 'Đang tải...' : 'Áp dụng'}</button>
+          <form className="financial-dashboard__filters" onSubmit={submitFilter} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>
+              Nguồn đơn
+              <select value={source} onChange={(event) => { setSource(event.target.value); loadChart(by, startDate, endDate, event.target.value); }} style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #ddd' }}>
+                <option value="">Tất cả</option>
+                <option value="online">Đơn Online</option>
+                <option value="offline">Tại quầy (POS)</option>
+              </select>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Nhóm theo<select value={by} onChange={(event) => changePeriod(event.target.value)} style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #ddd' }}><option value="day">Theo ngày</option><option value="month">Theo tháng</option><option value="year">Theo năm</option></select></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Từ ngày<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #ddd' }} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Đến ngày<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #ddd' }} /></label>
+            <button className="button button--secondary" type="submit" disabled={loadingChart} style={{ padding: '0.4rem 1rem' }}>{loadingChart ? 'Đang tải...' : 'Áp dụng'}</button>
           </form>
         </div>
 
@@ -176,6 +222,52 @@ export default function DashboardPage() {
         </div>
         {loadingChart ? <div className="financial-chart__loading">Đang tải dữ liệu biểu đồ...</div> : <FinancialLineChart data={financialData} enabledLines={enabledLines} onHover={setHoveredPoint} />}
         <p className="financial-dashboard__footnote">{hoveredPoint ? `Đang xem: ${hoveredPoint.fullLabel}` : `Hiển thị ${selectedLineKeys.map((key) => lineConfig[key].label.toLowerCase()).join(' và ')}. Lợi nhuận = doanh thu thực nhận − giá nhập của sản phẩm trong đơn.`}</p>
+
+        {/* Bảng đối soát chi tiết */}
+        <div style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+          <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 'bold' }}>Bảng đối soát doanh thu và lợi nhuận chi tiết</h3>
+          <div className="table-scroll">
+            <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f5f5f5', textAlign: 'left', borderBottom: '2px solid #ddd' }}>
+                  <th style={{ padding: '0.75rem' }}>Kỳ thời gian</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'center' }}>Số đơn hoàn thành</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Doanh thu</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Lợi nhuận</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Tỷ suất lợi nhuận (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {financialData.map((item) => {
+                  const margin = item.revenue > 0 ? (item.profit / item.revenue) * 100 : 0;
+                  return (
+                    <tr key={item.key} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '0.75rem' }}>{item.fullLabel}</td>
+                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.orderCount}</td>
+                      <td style={{ padding: '0.75rem', textAlign: 'right', color: '#2b67e8', fontWeight: 'bold' }}>{currency.format(item.revenue)}</td>
+                      <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981', fontWeight: 'bold' }}>{currency.format(item.profit)}</td>
+                      <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold' }}>{margin.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+                {financialData.length > 0 && (
+                  <tr style={{ background: '#f9f9f9', fontWeight: 'bold', borderTop: '2px solid #ccc' }}>
+                    <td style={{ padding: '0.75rem' }}>Tổng cộng</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>{totalCompletedOrders}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#2b67e8' }}>{currency.format(totalRevenueAll)}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right', color: '#10b981' }}>{currency.format(totalProfitAll)}</td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>{avgProfitMarginAll.toFixed(1)}%</td>
+                  </tr>
+                )}
+                {financialData.length === 0 && (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '1rem', color: '#666' }}>Không có dữ liệu đối soát.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <div className="dashboard-lower-grid">

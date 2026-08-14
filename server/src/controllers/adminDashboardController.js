@@ -101,9 +101,9 @@ function totalCostExpression() {
 
 // GET /api/admin/dashboard/overview
 export const getOverview = asyncHandler(async (req, res) => {
-  const [totalProducts, totalUsers, totalOrders, financialData, statusCounts] = await Promise.all([
+  const [totalProducts, totalUsers, totalOrders, financialData, statusCounts, channelData] = await Promise.all([
     Product.countDocuments(),
-    User.countDocuments(),
+    User.countDocuments({ role: 'CUSTOMER' }),
     Order.countDocuments(),
     Order.aggregate([
       { $match: { status: 'COMPLETED' } },
@@ -111,7 +111,30 @@ export const getOverview = asyncHandler(async (req, res) => {
       { $group: { _id: null, totalRevenue: { $sum: '$revenue' }, totalProfit: { $sum: { $subtract: ['$revenue', '$cost'] } } } },
     ]),
     Order.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Order.aggregate([
+      { $match: { status: 'COMPLETED' } },
+      { $group: {
+        _id: { $in: ['$payment.method', ['COD', 'VNPAY']] },
+        total: { $sum: '$pricing.total' },
+        count: { $sum: 1 }
+      } }
+    ])
   ]);
+
+  let onlineRevenue = 0;
+  let offlineRevenue = 0;
+  let onlineCount = 0;
+  let offlineCount = 0;
+
+  for (const group of channelData) {
+    if (group._id === true) {
+      onlineRevenue = group.total;
+      onlineCount = group.count;
+    } else {
+      offlineRevenue = group.total;
+      offlineCount = group.count;
+    }
+  }
 
   const statusBreakdown = statusCounts.reduce((result, item) => ({ ...result, [item._id]: item.count }), {});
   res.json({ data: {
@@ -120,6 +143,10 @@ export const getOverview = asyncHandler(async (req, res) => {
     totalOrders,
     totalRevenue: financialData[0]?.totalRevenue || 0,
     totalProfit: financialData[0]?.totalProfit || 0,
+    onlineRevenue,
+    offlineRevenue,
+    onlineCount,
+    offlineCount,
     statusBreakdown,
   } });
 });
@@ -134,8 +161,16 @@ export const getRevenueStats = asyncHandler(async (req, res) => {
   const endDate = parseDate(req.query.endDate, 'Ngày kết thúc', true) || defaults.end;
   if (startDate > endDate) throw new ApiError(400, 'Ngày bắt đầu không được sau ngày kết thúc.');
 
+  const matchConditions = { status: 'COMPLETED', createdAt: { $gte: startDate, $lte: endDate } };
+  const source = req.query.source;
+  if (source === 'online') {
+    matchConditions['payment.method'] = { $in: ['COD', 'VNPAY'] };
+  } else if (source === 'offline') {
+    matchConditions['payment.method'] = { $in: ['CASH', 'BANK_TRANSFER', 'CARD'] };
+  }
+
   const grouped = await Order.aggregate([
-    { $match: { status: 'COMPLETED', createdAt: { $gte: startDate, $lte: endDate } } },
+    { $match: matchConditions },
     { $project: { period: getPeriodExpression(by), revenue: '$pricing.total', cost: totalCostExpression() } },
     { $group: {
       _id: '$period',

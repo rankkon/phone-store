@@ -18,7 +18,7 @@ const orderItemSchema = new mongoose.Schema({
 
 const shippingAddressSchema = new mongoose.Schema({
   recipientName: { type: String, required: true, trim: true },
-  phone: { type: String, required: true, trim: true },
+  phone: { type: String, trim: true, default: '' },
   province: { type: String, required: true, trim: true },
   district: { type: String, required: true, trim: true },
   ward: { type: String, required: true, trim: true },
@@ -39,7 +39,7 @@ const voucherSnapshotSchema = new mongoose.Schema({
 }, { _id: false });
 
 const paymentSchema = new mongoose.Schema({
-  method: { type: String, enum: ['COD', 'VNPAY'], required: true, default: 'COD' },
+  method: { type: String, enum: ['COD', 'VNPAY', 'CASH', 'BANK_TRANSFER', 'CARD'], required: true, default: 'COD' },
   status: { type: String, enum: ['UNPAID', 'PENDING', 'PAID', 'FAILED'], required: true, default: 'UNPAID' },
   requestRefs: { type: [String], default: [] },
   transactionRef: { type: String, default: '' },
@@ -55,7 +55,7 @@ const statusHistorySchema = new mongoose.Schema({
 
 const orderSchema = new mongoose.Schema({
   orderCode: { type: String, required: true, unique: true, index: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User', index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   items: { type: [orderItemSchema], required: true, validate: { validator: (items) => items.length > 0, message: 'Đơn hàng phải có ít nhất một sản phẩm.' } },
   shippingAddress: { type: shippingAddressSchema, required: true },
   note: { type: String, trim: true, default: '' },

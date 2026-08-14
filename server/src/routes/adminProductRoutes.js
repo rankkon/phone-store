@@ -6,7 +6,7 @@ import { allowRoles, requireAuth } from '../middlewares/auth.js';
 import { productImageUpload } from '../middlewares/upload.js';
 
 const router = Router();
-router.use(requireAuth, allowRoles('ADMIN'));
+router.use(requireAuth, allowRoles('ADMIN', 'STAFF'));
 router.route('/').get(getAdminProducts).post(createProduct);
 router.get('/:id', getAdminProduct);
 router.patch('/:id', updateProduct);

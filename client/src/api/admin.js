@@ -23,8 +23,12 @@ export const productApi = {
 
 export const userApi = {
   list: (params) => api.get('/admin/users', { params }),
-  updateStatus: (id, status) => api.patch(`/admin/users/${id}/status`, { status }),
+  create: (payload) => api.post('/admin/users', payload),
+  getLtv: (id) => api.get(`/admin/users/${id}/ltv`),
+  exportCsv: (params) => api.get('/admin/users/export', { params, responseType: 'blob' }),
+  updateStatus: (id, status, blockReason) => api.patch(`/admin/users/${id}/status`, { status, blockReason }),
   updateRole: (id, role) => api.patch(`/admin/users/${id}/role`, { role }),
+  updateProfile: (id, payload) => api.patch(`/admin/users/${id}`, payload),
 };
 
 export const dashboardApi = {

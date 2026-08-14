@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -191,21 +192,45 @@ export const register = asyncHandler(async (req, res) => {
   }
   const normalizedEmail = validateEmail(email);
   if (password.length < 8) throw new ApiError(400, 'Mật khẩu phải có ít nhất 8 ký tự.');
-  if (await User.exists({ email: normalizedEmail })) throw new ApiError(409, 'Email đã được sử dụng.');
+  
+  const existingUser = await User.findOne({ email: normalizedEmail });
+  if (existingUser && existingUser.isEmailVerified) {
+    throw new ApiError(409, 'Email đã được sử dụng.');
+  }
+
   ensureMailer();
 
-  const user = await User.create({
-    fullName: fullName.trim(),
-    email: normalizedEmail,
-    phone: phone.trim(),
-    passwordHash: await User.hashPassword(password),
-    role: 'CUSTOMER',
-  });
+  let user = existingUser;
+  const cleanPhone = phone?.trim();
+
+  if (user) {
+    user.fullName = fullName.trim();
+    user.passwordHash = await User.hashPassword(password);
+    if (cleanPhone) user.phone = cleanPhone;
+    await user.save();
+  } else {
+    user = await User.create({
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      phone: cleanPhone || '',
+      passwordHash: await User.hashPassword(password),
+      role: 'CUSTOMER',
+    });
+  }
+
+  if (user.phone) {
+    await Order.updateMany(
+      { 'shippingAddress.phone': user.phone, userId: null },
+      { $set: { userId: user._id } }
+    );
+  }
 
   try {
     await sendEmailCode(user, 'EMAIL_VERIFICATION');
   } catch (error) {
-    await Promise.all([EmailVerificationCode.deleteMany({ userId: user._id }), user.deleteOne()]);
+    if (!existingUser) {
+      await Promise.all([EmailVerificationCode.deleteMany({ userId: user._id }), user.deleteOne()]);
+    }
     throw error;
   }
   await sendAuthResponse(res, user, 201, 'Đăng ký thành công. Mã xác minh 6 số đã được gửi đến email của bạn.');
@@ -272,6 +297,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const user = req.user;
   if (typeof fullName === 'string' && fullName.trim()) user.fullName = fullName.trim();
   if (typeof phone === 'string') user.phone = phone.trim();
+
   if (address && typeof address === 'object') {
     for (const field of addressFields) {
       if (typeof address[field] === 'string') user.address[field] = address[field].trim();

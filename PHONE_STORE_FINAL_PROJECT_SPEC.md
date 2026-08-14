@@ -5,7 +5,7 @@
 > **Nhân sự:** Nhóm 2 thành viên.  
 > **Mục đích:** Tài liệu nguồn chính để nhóm và AI agent đọc trước khi thiết kế, viết code hoặc thay đổi project.  
 > **Tài liệu này thay thế bản `AGENT_PROJECT_MASTER_PLAN.md` trước đó nếu có nội dung mâu thuẫn.**
-> **Trạng thái source hiện tại:** Đã có storefront, phân quyền, quản lý catalog/đơn/người dùng/voucher, dashboard, hủy đơn, VNPay, refresh token, OTP email, đánh giá sản phẩm, ưu đãi khả dụng, trang About/Contact và footer. Chưa có ảnh đại diện, test tự động hoặc cấu hình triển khai; gửi email cần SMTP trong `.env`.
+> **Trạng thái source hiện tại:** Đã có storefront, phân quyền, quản lý catalog/đơn/người dùng/voucher, dashboard, hủy đơn, VNPay, refresh token, OTP email, đánh giá sản phẩm, ưu đãi khả dụng, trang About/Contact và footer. Đã bổ sung hệ thống tạo đơn trực tiếp tại quầy (POS), chế độ bán hàng qua điện thoại (Telesale) hỗ trợ COD/Chuyển khoản và tính phí ship theo chính sách Freeship, in hóa đơn chuyên nghiệp, quản lý CRM đồng bộ thông minh theo Email và SĐT (tự động gợi ý khi trùng SĐT, sinh Email ảo cho khách lớn tuổi), nút chỉnh sửa hồ sơ khách hàng cho Admin. Chưa có ảnh đại diện, test tự động hoặc cấu hình triển khai; gửi email cần SMTP trong `.env`.
 
 ---
 

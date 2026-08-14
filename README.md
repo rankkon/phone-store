@@ -1,6 +1,6 @@
 # Phone Store
 
-Website thương mại điện tử bán điện thoại theo MERN Stack. Dự án có storefront, quản trị sản phẩm/đơn/người dùng, dashboard, thanh toán COD và tích hợp VNPay Sandbox. Hướng dẫn này dành cho người mới clone repository và muốn chạy dự án trên máy cá nhân.
+Website thương mại điện tử bán điện thoại theo MERN Stack. Dự án có storefront, quản trị sản phẩm/đơn/người dùng, bán hàng tại quầy POS, Telesale, dashboard, thanh toán COD và tích hợp VNPay Sandbox. Hướng dẫn này dành cho người mới clone repository và muốn chạy dự án trên máy cá nhân.
 
 Thông tin nhanh về cấu trúc và các chức năng đã có: [CODEBASE_SUMMARY.md](CODEBASE_SUMMARY.md). Phạm vi/định hướng toàn dự án: [PHONE_STORE_FINAL_PROJECT_SPEC.md](PHONE_STORE_FINAL_PROJECT_SPEC.md).
 
@@ -207,12 +207,13 @@ npm run dev
 
 - Frontend: `http://localhost:5173`
 - Backend health check: `http://localhost:5000/api/health`
-- Đăng nhập bằng tài khoản Admin rồi vào **Quản trị** để thêm hãng/sản phẩm/voucher, quản lý user và xem dashboard.
-- Đăng nhập bằng tài khoản Staff để xem, cập nhật đơn và xử lý yêu cầu hủy.
+- Đăng nhập bằng tài khoản Admin rồi vào **Quản trị** để thêm hãng/sản phẩm/voucher, quản lý khách hàng, xuất CSV và xem dashboard theo kênh Online/POS.
+- Đăng nhập bằng tài khoản Staff để xem, lọc, xuất đơn, cập nhật đơn/thanh toán, xử lý yêu cầu hủy và tạo đơn POS hoặc Telesale.
 - Đăng nhập bằng Customer để xem sản phẩm, thêm giỏ, áp dụng `WELCOME10`, đặt COD hoặc thử VNPay khi đã cấu hình.
 - Mở chi tiết sản phẩm để xem thống kê/lọc đánh giá theo sao; Customer đã xác minh email có một đánh giá duy nhất trên mỗi sản phẩm và chỉ có thể sửa đánh giá của chính mình.
 - Mở menu tên tài khoản để vào **Ưu đãi của tôi**, hồ sơ hoặc đơn hàng; footer có các liên kết Về chúng tôi, Liên hệ và hỗ trợ khách hàng.
 - Đăng nhập Admin và vào **Tổng quan** để xem biểu đồ doanh thu/lợi nhuận; có thể chọn nhóm theo ngày, tháng, năm, khoảng thời gian và line hiển thị.
+- Tại **Đơn hàng**, thử tạo đơn POS hoặc Telesale, tra cứu khách theo email/số điện thoại, chọn phương thức thanh toán, sau đó mở chi tiết đơn để in hóa đơn hoặc phiếu giao hàng.
 
 Trước khi push code, chạy:
 

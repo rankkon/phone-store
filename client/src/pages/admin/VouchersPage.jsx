@@ -128,10 +128,8 @@ export default function VouchersPage() {
           </div>
           <label>Giá trị đơn tối thiểu (VND)<input type="number" min="0" step="1000" value={form.minOrderValue} onChange={(event) => setForm({ ...form, minOrderValue: event.target.value })} required /></label>
           {form.type === 'PERCENT' && <label>Mức giảm tối đa (VND, tùy chọn)<input type="number" min="0" step="1000" value={form.maxDiscount} onChange={(event) => setForm({ ...form, maxDiscount: event.target.value })} /></label>}
-          <div className="two-columns">
-            <label>Bắt đầu<input type="datetime-local" value={form.startAt} onChange={(event) => setForm({ ...form, startAt: event.target.value })} required /></label>
-            <label>Kết thúc<input type="datetime-local" value={form.endAt} onChange={(event) => setForm({ ...form, endAt: event.target.value })} required /></label>
-          </div>
+          <label>Bắt đầu<input type="datetime-local" value={form.startAt} onChange={(event) => setForm({ ...form, startAt: event.target.value })} required /></label>
+          <label>Kết thúc<input type="datetime-local" value={form.endAt} onChange={(event) => setForm({ ...form, endAt: event.target.value })} required /></label>
           <label className="checkbox-label"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} />Kích hoạt voucher</label>
           <div className="button-row"><button className="button" disabled={saving}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Thêm voucher'}</button>{editingId && <button type="button" className="button button--ghost" onClick={resetForm}>Hủy</button>}</div>
         </form>

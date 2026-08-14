@@ -7,7 +7,9 @@ Tài liệu ngắn để nắm implementation hiện có. Yêu cầu, quyết đ
 - MERN: React/Vite frontend và Express/Mongoose backend.
 - Đăng ký gửi OTP 6 số để xác minh email; hồ sơ hiển thị trạng thái xác minh. Đổi/quên mật khẩu cũng dùng OTP email; refresh token được xoay vòng.
 - Phân quyền backend cho `CUSTOMER`, `STAFF`, `ADMIN`; tài khoản `BLOCKED` không thể đăng nhập hoặc gọi API bảo vệ.
-- Admin quản lý hãng, sản phẩm, biến thể, giá nhập/giá bán, tồn kho và ảnh Cloudinary; dashboard có biểu đồ doanh thu/lợi nhuận theo ngày, tháng hoặc năm.
+- Admin quản lý hãng, sản phẩm, biến thể, giá nhập/giá bán, tồn kho và ảnh Cloudinary; dashboard tích hợp biểu đồ doanh thu/lợi nhuận động theo ngày, tháng, năm; hiển thị tỷ suất lợi nhuận gộp, tỷ trọng doanh số đa kênh (Online vs POS) và bộ lọc Nguồn đơn.
+- Giao diện bán hàng trực tiếp tại quầy (POS) & Telesale hỗ trợ tạo đơn hoàn thành tại quầy hoặc đặt đơn hộ giao hàng tận nơi (Telesale qua Hotline) kèm địa chỉ ship, tự động tính phí vận chuyển theo chính sách Freeship (đơn hàng tự động miễn phí ship nếu tổng giá trị máy >= 15 triệu, ngược lại tính 30.000₫). Đơn Telesale COD lưu hình thức thanh toán đúng là `'COD'` và trạng thái `'UNPAID'` chờ nhận hàng thanh toán, tự động trừ tồn kho và in hóa đơn/phiếu giao hàng chuyên nghiệp.
+- Quản lý khách hàng CRM đồng bộ theo Email & SĐT: Sử dụng Email làm mã định danh duy nhất. Khi nhập SĐT trùng lặp tại POS, hệ thống hiển thị danh sách gợi ý tài khoản để chọn hoặc bấm tạo mới. Hỗ trợ tạo mới tài khoản không email (cho khách hàng lớn tuổi) bằng cách tự động sinh Email ảo hệ thống `.offline` duy nhất dựa trên SĐT của họ. Admin có thêm chức năng chỉnh sửa hồ sơ khách hàng (Họ tên, Email, SĐT) để dễ dàng nâng cấp từ Email ảo lên Email thật.
 - Storefront có danh sách sản phẩm, tìm kiếm, lọc/sắp xếp/phân trang bằng truy vấn MongoDB phía backend; frontend debounce 1 giây sau thay đổi bộ lọc rồi mới gọi API. Lựa chọn RAM, bộ nhớ và màu trong bộ lọc được lấy động từ các biến thể đang bán. Trang chi tiết có hệ thống đánh giá sao/nhận xét có thống kê theo từng mức sao.
 - Customer có giỏ hàng, voucher, trang “Ưu đãi của tôi”, checkout COD hoặc VNPay, lịch sử/chi tiết đơn, tiếp tục thanh toán VNPay cho đơn đang chờ và yêu cầu hủy đơn.
 - Có menu tài khoản dạng dropdown, trang Về chúng tôi/Liên hệ và footer điều hướng, hỗ trợ khách hàng, thông tin liên hệ.
@@ -55,7 +57,7 @@ Luồng backend: `Route → requireAuth/allowRoles (nếu cần) → Controller 
 
 ## Data models chính
 
-- `User`: `fullName`, `email`, `passwordHash`, `phone`, `address`, `avatarUrl`, `role`, `status`, `isEmailVerified`, `emailVerifiedAt`, hash/hạn refresh token.
+- `User`: `fullName`, `email` (không bắt buộc, sparse unique index hỗ trợ tạo tài khoản mua lẻ tại quầy không email), `passwordHash`, `phone`, `address`, `avatarUrl`, `role`, `status`, `isEmailVerified`, `emailVerifiedAt`, hash/hạn refresh token.
 - `EmailVerificationCode`: hash OTP, mục đích (`EMAIL_VERIFICATION`, `PASSWORD_CHANGE`, `PASSWORD_RESET`), hạn dùng, thời điểm gửi và số lần thử.
 - `Brand`: `name`, `slug`, `logoUrl`, `logoPublicId`, `isActive`.
 - `Product`: `name`, `slug`, `modelCode`, `brandId`, `description`, `specifications`, `images`, `variants`, `isActive`.
@@ -63,7 +65,7 @@ Luồng backend: `Route → requireAuth/allowRoles (nếu cần) → Controller 
 - `Cart` chỉ lưu `productId`, `variantId`, `quantity`; backend luôn đọc lại giá và stock.
 - `Voucher` được validate ở backend khi báo giá/đặt hàng; Admin có thể thêm, sửa, xóa và bật/tắt, gồm thời gian bắt đầu/kết thúc.
 - `ProductReview` là một đánh giá cho mỗi Customer trên mỗi sản phẩm, gồm 1–5 sao và nhận xét; API trả điểm trung bình và số lượng theo từng mức sao.
-- `Order` lưu snapshot sản phẩm, gồm `unitPrice` và `unitCost`, địa chỉ, pricing, voucher, payment, trạng thái và lịch sử trạng thái. Nhờ vậy lợi nhuận lịch sử không thay đổi khi giá nhập sau này được sửa. Payment lưu các `requestRefs` VNPay để tiếp tục thanh toán an toàn; COD bắt đầu `PENDING`/`UNPAID`; VNPay được xác minh chữ ký, mã website và số tiền khi trả kết quả.
+- `Order` lưu snapshot sản phẩm, gồm `unitPrice` và `unitCost`, địa chỉ, pricing, voucher, payment, trạng thái và lịch sử trạng thái. Nhờ vậy lợi nhuận lịch sử không thay đổi khi giá nhập sau này được sửa. `userId` không bắt buộc để hỗ trợ đơn lẻ tại quầy (POS) hoặc khách vãng lai. Payment lưu các `requestRefs` VNPay để tiếp tục thanh toán an toàn; COD bắt đầu `PENDING`/`UNPAID`; VNPay được xác minh chữ ký, mã website và số tiền khi trả kết quả.
 
 ## API hiện có
 
@@ -78,9 +80,9 @@ Base URL: `/api`.
 | Review | `GET /reviews/mine`, `POST /reviews`, `PATCH /reviews/:reviewId` cho Customer; mỗi Customer có một đánh giá/sản phẩm và chỉ được sửa đánh giá của chính mình. |
 | Customer order | `POST /orders`; `GET /orders/my-orders`, `/my-orders/:orderCode`; `POST /orders/:id/cancel-request` |
 | Payment | `POST /payments/vnpay/create`, `POST /payments/vnpay/orders/:orderCode/retry`, `GET /payments/vnpay/return` |
-| Management order | `GET /management/orders`, `GET /management/orders/:id`, `PATCH /management/orders/:id/status`, `POST /:id/cancel/approve`, `POST /:id/cancel/reject` |
+| Management order | `GET /management/orders`, `GET /management/orders/:id`, `PATCH /management/orders/:id/status`, `POST /:id/cancel/approve`, `POST /:id/cancel/reject`; `POST /management/orders/offline` (tạo đơn bán lẻ POS / Telesale), `GET /management/orders/customer-lookup` (tìm kiếm mảng khách hàng trùng khớp) |
 | Admin catalog | `GET/POST/PATCH /admin/brands`; `GET/POST/PATCH /admin/products`; upload/xóa ảnh; thêm/sửa biến thể |
-| Admin user/dashboard | `GET /admin/users`, `PATCH /admin/users/:id/status`, `PATCH /admin/users/:id/role`; `GET /admin/dashboard/{overview,revenue,top-products,low-stock}` |
+| Admin user/dashboard | `GET /admin/users`, `PATCH /admin/users/:id/status`, `PATCH /admin/users/:id/role`, `PATCH /admin/users/:id` (sửa hồ sơ Họ tên, Email, SĐT); `GET /admin/dashboard/{overview,revenue,top-products,low-stock}` |
 | Admin voucher | `GET/POST /admin/vouchers`; `PATCH /admin/vouchers/:id`, `/admin/vouchers/:id/status`; `DELETE /admin/vouchers/:id` |
 
 `/management/orders/*` yêu cầu `ADMIN` hoặc `STAFF`; các endpoint `/admin/*` yêu cầu `ADMIN`.
