@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import UserAvatar from './UserAvatar';
+import NotificationBell from './NotificationBell';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -29,16 +31,17 @@ export default function AppLayout() {
           <NavLink to="/contact">Liên hệ</NavLink>
           {user?.role === 'CUSTOMER' && <NavLink to="/cart">Giỏ hàng</NavLink>}
           {!user && <NavLink to="/login">Đăng nhập</NavLink>}
-          {user && <div className="account-menu" ref={menuRef}>
-            <button type="button" className="account-menu__trigger" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen}>{displayName}<span>⌄</span></button>
+          {user && <><NotificationBell /><div className="account-menu" ref={menuRef}>
+            <button type="button" className="account-menu__trigger" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen}><UserAvatar user={user} size="sm" />{displayName}<span>⌄</span></button>
             {menuOpen && <div className="account-menu__dropdown">
               <p className="account-menu__email">{user.email}</p>
+              <Link to="/notifications">Thông báo</Link>
               <Link to="/profile">Hồ sơ cá nhân</Link>
-              {user.role === 'CUSTOMER' && <><Link to="/orders">Đơn hàng của tôi</Link><Link to="/my-vouchers">Ưu đãi của tôi</Link></>}
+              {user.role === 'CUSTOMER' && <><Link to="/orders">Đơn hàng của tôi</Link><Link to="/returns">Yêu cầu hoàn trả</Link><Link to="/favorites">Sản phẩm yêu thích</Link><Link to="/my-vouchers">Ưu đãi của tôi</Link></>}
               {(user.role === 'ADMIN' || user.role === 'STAFF') && <Link to="/admin">Khu vực quản trị</Link>}
               <button type="button" onClick={logout}>Đăng xuất</button>
             </div>}
-          </div>}
+          </div></>}
         </nav>
       </header>
       <main className="site-content"><Outlet /></main>

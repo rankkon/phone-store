@@ -10,6 +10,13 @@ export const orderStatusLabels = {
   CANCELLED: 'Đã hủy',
 };
 
+export const returnStatusLabels = {
+  PENDING: 'Chờ duyệt',
+  APPROVED: 'Đã duyệt',
+  REJECTED: 'Đã từ chối',
+  COMPLETED: 'Đã hoàn tất',
+};
+
 export function formatDate(value) {
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }

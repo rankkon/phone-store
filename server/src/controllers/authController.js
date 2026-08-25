@@ -5,10 +5,17 @@ import nodemailer from 'nodemailer';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
+import { cloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+  validateAddress,
+  validateEmail as validateEmailInput,
+  validatePassword as validatePasswordInput,
+  validatePersonName,
+  validatePhone,
+} from '../utils/inputValidation.js';
 
-const addressFields = ['recipientName', 'phone', 'province', 'district', 'ward', 'detail'];
 const REFRESH_COOKIE = 'phone_store_refresh_token';
 const EMAIL_CODE_LIFETIME_MS = 10 * 60 * 1000;
 const EMAIL_CODE_COOLDOWN_MS = 60 * 1000;
@@ -99,15 +106,25 @@ function ensureVerifiedEmail(user) {
   }
 }
 
-function validateEmail(email) {
-  if (!email?.trim() || !/^\S+@\S+\.\S+$/.test(email)) throw new ApiError(400, 'Vui lòng nhập email hợp lệ.');
-  return email.trim().toLowerCase();
+function validatePassword(newPassword, confirmPassword) {
+  return validatePasswordInput(newPassword, confirmPassword);
 }
 
-function validatePassword(newPassword, confirmPassword) {
-  if (!newPassword || !confirmPassword) throw new ApiError(400, 'Vui lòng nhập mật khẩu mới và xác nhận mật khẩu.');
-  if (newPassword !== confirmPassword) throw new ApiError(400, 'Xác nhận mật khẩu chưa khớp.');
-  if (newPassword.length < 8) throw new ApiError(400, 'Mật khẩu mới phải có ít nhất 8 ký tự.');
+function uploadAvatarBuffer(file, userId) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'phone-store/avatars',
+        public_id: `user-${userId}`,
+        overwrite: true,
+        invalidate: true,
+        resource_type: 'image',
+        transformation: [{ width: 320, height: 320, crop: 'fill', gravity: 'face' }, { quality: 'auto', fetch_format: 'auto' }],
+      },
+      (error, result) => (error ? reject(error) : resolve(result)),
+    );
+    stream.end(file.buffer);
+  });
 }
 
 async function sendEmailCode(user, purpose) {
@@ -190,9 +207,10 @@ export const register = asyncHandler(async (req, res) => {
   if (!fullName?.trim() || !email?.trim() || !password) {
     throw new ApiError(400, 'Vui lòng nhập họ tên, email và mật khẩu.');
   }
-  const normalizedEmail = validateEmail(email);
-  if (password.length < 8) throw new ApiError(400, 'Mật khẩu phải có ít nhất 8 ký tự.');
-  
+  const normalizedEmail = validateEmailInput(email);
+  const normalizedName = validatePersonName(fullName);
+  validatePasswordInput(password);
+
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser && existingUser.isEmailVerified) {
     throw new ApiError(409, 'Email đã được sử dụng.');
@@ -204,15 +222,15 @@ export const register = asyncHandler(async (req, res) => {
   const cleanPhone = phone?.trim();
 
   if (user) {
-    user.fullName = fullName.trim();
+    user.fullName = normalizedName;
     user.passwordHash = await User.hashPassword(password);
-    if (cleanPhone) user.phone = cleanPhone;
+    if (cleanPhone) user.phone = validatePhone(cleanPhone);
     await user.save();
   } else {
     user = await User.create({
-      fullName: fullName.trim(),
+      fullName: normalizedName,
       email: normalizedEmail,
-      phone: cleanPhone || '',
+      phone: cleanPhone ? validatePhone(cleanPhone) : '',
       passwordHash: await User.hashPassword(password),
       role: 'CUSTOMER',
     });
@@ -239,8 +257,9 @@ export const register = asyncHandler(async (req, res) => {
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) throw new ApiError(400, 'Vui lòng nhập email và mật khẩu.');
+  const normalizedEmail = validateEmailInput(email);
 
-  const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+passwordHash');
+  const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
   if (!user || !(await user.comparePassword(password))) throw new ApiError(401, 'Email hoặc mật khẩu không chính xác.');
   if (user.status === 'BLOCKED') throw new ApiError(403, 'Tài khoản của bạn đã bị khóa.');
 
@@ -295,16 +314,47 @@ export const getMe = (req, res) => {
 export const updateProfile = asyncHandler(async (req, res) => {
   const { fullName, phone, address } = req.body;
   const user = req.user;
-  if (typeof fullName === 'string' && fullName.trim()) user.fullName = fullName.trim();
-  if (typeof phone === 'string') user.phone = phone.trim();
+  if (typeof fullName === 'string') user.fullName = validatePersonName(fullName);
+  if (typeof phone === 'string') user.phone = validatePhone(phone);
 
   if (address && typeof address === 'object') {
-    for (const field of addressFields) {
-      if (typeof address[field] === 'string') user.address[field] = address[field].trim();
-    }
+    Object.assign(user.address, validateAddress(address, { required: false }));
   }
   await user.save();
   res.json({ message: 'Đã cập nhật hồ sơ.', data: user });
+});
+
+export const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!isCloudinaryConfigured) {
+    throw new ApiError(503, 'Cloudinary chưa được cấu hình trên server.');
+  }
+  if (!req.file) {
+    throw new ApiError(400, 'Vui lòng chọn một ảnh đại diện JPG, PNG hoặc WEBP (tối đa 2 MB).');
+  }
+
+  const result = await uploadAvatarBuffer(req.file, req.user._id);
+  req.user.avatarUrl = result.secure_url;
+  req.user.avatarPublicId = result.public_id;
+  await req.user.save();
+  res.json({ message: 'Đã cập nhật ảnh đại diện.', data: req.user });
+});
+
+export const deleteAvatar = asyncHandler(async (req, res) => {
+  const { avatarPublicId } = req.user;
+  if (!req.user.avatarUrl && !avatarPublicId) {
+    throw new ApiError(404, 'Tài khoản chưa có ảnh đại diện để xóa.');
+  }
+
+  if (avatarPublicId) {
+    if (!isCloudinaryConfigured) {
+      throw new ApiError(503, 'Cloudinary chưa được cấu hình trên server.');
+    }
+    await cloudinary.uploader.destroy(avatarPublicId, { resource_type: 'image', invalidate: true });
+  }
+  req.user.avatarUrl = '';
+  req.user.avatarPublicId = '';
+  await req.user.save();
+  res.json({ message: 'Đã xóa ảnh đại diện.', data: req.user });
 });
 
 export const sendEmailVerificationCode = asyncHandler(async (req, res) => {
@@ -344,7 +394,7 @@ export const changePassword = asyncHandler(async (req, res) => {
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {
-  const email = validateEmail(req.body.email);
+  const email = validateEmailInput(req.body.email);
   ensureMailer();
   const user = await User.findOne({ email });
   const genericMessage = 'Nếu email đã được xác minh và tồn tại, mã đặt lại mật khẩu đã được gửi.';
@@ -356,7 +406,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  const email = validateEmail(req.body.email);
+  const email = validateEmailInput(req.body.email);
   const { code, newPassword, confirmPassword } = req.body;
   validatePassword(newPassword, confirmPassword);
 

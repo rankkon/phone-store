@@ -5,9 +5,11 @@ import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
 import { currency, formatDate, orderStatusLabels } from '../../utils/order';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
+  const { confirm, notify } = useFeedback();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -22,13 +24,22 @@ export default function AdminOrderDetailPage() {
       .catch((requestError) => setError(getApiError(requestError)));
   }, [id]);
 
-  const handleUpdateStatus = (newStatus) => {
+  const handleUpdateStatus = async (newStatus) => {
     if (!newStatus || newStatus === order.status) return;
 
     const isReopeningFinishedOrder = ['COMPLETED', 'CANCELLED'].includes(order.status);
-    if (isReopeningFinishedOrder && !window.confirm(
-      `Đơn đang ở trạng thái "${orderStatusLabels[order.status]}". Bạn có chắc muốn đổi lại thành "${orderStatusLabels[newStatus]}"?`,
-    )) return;
+    const isCancelling = newStatus === 'CANCELLED';
+    if (isReopeningFinishedOrder || isCancelling) {
+      const confirmed = await confirm({
+        title: isCancelling ? 'Hủy đơn hàng?' : 'Mở lại đơn hàng đã kết thúc?',
+        message: isCancelling
+          ? 'Đơn hàng sẽ được hủy; tồn kho có thể được khôi phục theo trạng thái xử lý.'
+          : `Đơn đang ở trạng thái “${orderStatusLabels[order.status]}”. Bạn có chắc muốn đổi lại thành “${orderStatusLabels[newStatus]}”?`,
+        confirmLabel: isCancelling ? 'Hủy đơn' : 'Cập nhật trạng thái',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
 
     setUpdating(true);
     setActionError('');
@@ -37,17 +48,22 @@ export default function AdminOrderDetailPage() {
       .then((response) => {
         setOrder(response.data.data);
         setSuccessMessage(`Đã cập nhật trạng thái đơn hàng thành: ${orderStatusLabels[newStatus]}`);
+        notify(`Đã cập nhật trạng thái đơn thành ${orderStatusLabels[newStatus]}.`);
         setNote('');
         setSelectedStatus('');
         setUpdating(false);
       })
       .catch((requestError) => {
-        setActionError(getApiError(requestError));
+        const message = getApiError(requestError);
+        setActionError(message);
+        notify(message, { type: 'error' });
         setUpdating(false);
       });
   };
 
-  const handleApproveCancel = () => {
+  const handleApproveCancel = async () => {
+    const confirmed = await confirm({ title: 'Duyệt yêu cầu hủy đơn?', message: 'Đơn hàng sẽ được hủy và số lượng tồn kho sẽ được khôi phục.', confirmLabel: 'Duyệt hủy đơn', tone: 'danger' });
+    if (!confirmed) return;
     setUpdating(true);
     setActionError('');
     setSuccessMessage('');
@@ -55,16 +71,21 @@ export default function AdminOrderDetailPage() {
       .then((response) => {
         setOrder(response.data.data);
         setSuccessMessage('Đã duyệt yêu cầu hủy đơn hàng. Tồn kho đã được khôi phục.');
+        notify('Đã duyệt yêu cầu hủy đơn hàng.');
         setNote('');
         setUpdating(false);
       })
       .catch((requestError) => {
-        setActionError(getApiError(requestError));
+        const message = getApiError(requestError);
+        setActionError(message);
+        notify(message, { type: 'error' });
         setUpdating(false);
       });
   };
 
-  const handleRejectCancel = () => {
+  const handleRejectCancel = async () => {
+    const confirmed = await confirm({ title: 'Từ chối yêu cầu hủy đơn?', message: 'Đơn hàng sẽ quay lại quy trình xử lý trước đó.', confirmLabel: 'Từ chối yêu cầu', tone: 'info' });
+    if (!confirmed) return;
     setUpdating(true);
     setActionError('');
     setSuccessMessage('');
@@ -72,11 +93,14 @@ export default function AdminOrderDetailPage() {
       .then((response) => {
         setOrder(response.data.data);
         setSuccessMessage('Đã từ chối yêu cầu hủy đơn hàng.');
+        notify('Đã từ chối yêu cầu hủy đơn hàng.');
         setNote('');
         setUpdating(false);
       })
       .catch((requestError) => {
-        setActionError(getApiError(requestError));
+        const message = getApiError(requestError);
+        setActionError(message);
+        notify(message, { type: 'error' });
         setUpdating(false);
       });
   };
@@ -190,10 +214,10 @@ export default function AdminOrderDetailPage() {
     window.print();
   };
 
-  const handleUpdatePaymentStatus = (newPaymentStatus) => {
-    if (!window.confirm(`Bạn có chắc muốn cập nhật trạng thái thanh toán sang "${newPaymentStatus === 'PAID' ? 'Đã thanh toán' : newPaymentStatus === 'PENDING' ? 'Chờ thanh toán' : newPaymentStatus === 'FAILED' ? 'Thất bại' : 'Chưa thanh toán'}"?`)) {
-      return;
-    }
+  const handleUpdatePaymentStatus = async (newPaymentStatus) => {
+    const paymentLabel = newPaymentStatus === 'PAID' ? 'Đã thanh toán' : newPaymentStatus === 'PENDING' ? 'Chờ thanh toán' : newPaymentStatus === 'FAILED' ? 'Thất bại' : 'Chưa thanh toán';
+    const confirmed = await confirm({ title: 'Cập nhật trạng thái thanh toán?', message: `Trạng thái thanh toán sẽ được chuyển sang “${paymentLabel}” và lưu vào lịch sử đơn hàng.`, confirmLabel: 'Cập nhật thanh toán', tone: 'danger' });
+    if (!confirmed) return;
     setUpdating(true);
     setActionError('');
     setSuccessMessage('');
@@ -201,10 +225,13 @@ export default function AdminOrderDetailPage() {
       .then((response) => {
         setOrder(response.data.data);
         setSuccessMessage('Đã cập nhật trạng thái thanh toán thành công.');
+        notify('Đã cập nhật trạng thái thanh toán.');
         setUpdating(false);
       })
       .catch((requestError) => {
-        setActionError(getApiError(requestError));
+        const message = getApiError(requestError);
+        setActionError(message);
+        notify(message, { type: 'error' });
         setUpdating(false);
       });
   };

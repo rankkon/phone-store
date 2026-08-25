@@ -4,8 +4,14 @@ import Product from '../models/Product.js';
 import User from '../models/User.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { validateAddress, validateEmail, validateNote, validatePersonName, validatePhone } from '../utils/inputValidation.js';
+import { createNotification } from '../services/notificationService.js';
 
 const ALL_STATUSES = ['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPING', 'COMPLETED', 'CANCEL_REQUESTED', 'CANCELLED'];
+const ORDER_STATUS_LABELS = {
+  PENDING: 'Chờ xác nhận', CONFIRMED: 'Đã xác nhận', PREPARING: 'Đang chuẩn bị hàng', SHIPPING: 'Đang giao', COMPLETED: 'Đã hoàn thành', CANCEL_REQUESTED: 'Đang yêu cầu hủy', CANCELLED: 'Đã hủy',
+};
+const PAYMENT_STATUS_LABELS = { PAID: 'Đã thanh toán', PENDING: 'Chờ thanh toán', UNPAID: 'Chưa thanh toán', FAILED: 'Thanh toán thất bại' };
 const STATUS_TRANSITIONS = {
   PENDING: ALL_STATUSES,
   CONFIRMED: ALL_STATUSES,
@@ -254,7 +260,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     order.status = status;
     order.statusHistory.push({
       status,
-      note: note?.trim() || 'Cập nhật trạng thái đơn hàng.',
+      note: validateNote(note) || 'Cập nhật trạng thái đơn hàng.',
       changedBy: req.user._id,
       changedAt: new Date(),
     });
@@ -301,6 +307,13 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     { path: 'userId', select: 'fullName email' },
     { path: 'statusHistory.changedBy', select: 'fullName email role' }
   ]);
+  await createNotification({
+    userId: order.userId?._id || order.userId,
+    type: 'ORDER',
+    title: 'Đơn hàng được cập nhật',
+    message: `Trạng thái đơn ${order.orderCode} đã được cập nhật thành ${ORDER_STATUS_LABELS[status] || status}.`,
+    link: `/orders/${order.orderCode}`,
+  });
   res.json({ message: 'Cập nhật trạng thái thành công.', data: order });
 });
 
@@ -313,7 +326,7 @@ export const approveCancelOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Đơn hàng không có yêu cầu hủy nào cần duyệt.');
   }
 
-  const note = req.body.note?.trim() || 'Duyệt yêu cầu hủy đơn.';
+  const note = validateNote(req.body.note) || 'Duyệt yêu cầu hủy đơn.';
 
   const executeApprove = async (session) => {
     order.status = 'CANCELLED';
@@ -350,6 +363,13 @@ export const approveCancelOrder = asyncHandler(async (req, res) => {
     { path: 'userId', select: 'fullName email' },
     { path: 'statusHistory.changedBy', select: 'fullName email role' }
   ]);
+  await createNotification({
+    userId: order.userId?._id || order.userId,
+    type: 'CANCEL',
+    title: 'Yêu cầu hủy đơn đã được duyệt',
+    message: `Yêu cầu hủy đơn ${order.orderCode} đã được chấp nhận.`,
+    link: `/orders/${order.orderCode}`,
+  });
   res.json({ message: 'Đã duyệt yêu cầu hủy đơn hàng.', data: order });
 });
 
@@ -369,7 +389,7 @@ export const rejectCancelOrder = asyncHandler(async (req, res) => {
     .find((h) => h.status !== 'CANCEL_REQUESTED' && h.status !== 'CANCELLED');
   const targetStatus = lastState ? lastState.status : 'PENDING';
 
-  const note = req.body.note?.trim() || 'Từ chối yêu cầu hủy đơn.';
+  const note = validateNote(req.body.note) || 'Từ chối yêu cầu hủy đơn.';
 
   order.status = targetStatus;
   order.statusHistory.push({
@@ -384,6 +404,13 @@ export const rejectCancelOrder = asyncHandler(async (req, res) => {
     { path: 'userId', select: 'fullName email' },
     { path: 'statusHistory.changedBy', select: 'fullName email role' }
   ]);
+  await createNotification({
+    userId: order.userId?._id || order.userId,
+    type: 'CANCEL',
+    title: 'Yêu cầu hủy đơn đã được phản hồi',
+    message: `Yêu cầu hủy đơn ${order.orderCode} đã bị từ chối.`,
+    link: `/orders/${order.orderCode}`,
+  });
   res.json({ message: 'Đã từ chối yêu cầu hủy đơn hàng.', data: order });
 });
 
@@ -421,6 +448,13 @@ export const updateOrderPaymentStatus = asyncHandler(async (req, res) => {
     { path: 'userId', select: 'fullName email' },
     { path: 'statusHistory.changedBy', select: 'fullName email role' }
   ]);
+  await createNotification({
+    userId: order.userId?._id || order.userId,
+    type: 'PAYMENT',
+    title: 'Trạng thái thanh toán được cập nhật',
+    message: `Trạng thái thanh toán của đơn ${order.orderCode} đã được cập nhật thành ${PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}.`,
+    link: `/orders/${order.orderCode}`,
+  });
   res.json({ message: 'Cập nhật trạng thái thanh toán thành công.', data: order });
 });
 
@@ -433,17 +467,49 @@ export const createOfflineOrder = asyncHandler(async (req, res) => {
   if (!['CASH', 'BANK_TRANSFER', 'CARD', 'COD'].includes(paymentMethod)) {
     throw new ApiError(400, 'Phương thức thanh toán trực tiếp không hợp lệ.');
   }
+  if (!['STORE_PICKUP', 'SHIPPING'].includes(deliveryMode)) {
+    throw new ApiError(400, 'Hình thức nhận hàng không hợp lệ.');
+  }
+  if (userId && !mongoose.isValidObjectId(userId)) {
+    throw new ApiError(400, 'Mã khách hàng không hợp lệ.');
+  }
+
+  const cleanCustomerName = customerName?.trim() ? validatePersonName(customerName, 'Tên khách hàng') : '';
+  const cleanEmail = email?.trim() ? validateEmail(email) : '';
+  const cleanPhone = phone?.trim() ? validatePhone(phone) : '';
+  const isShipping = deliveryMode === 'SHIPPING';
+  const validatedShippingAddress = isShipping
+    ? validateAddress({
+      ...shippingAddress,
+      recipientName: shippingAddress?.recipientName || cleanCustomerName,
+      phone: shippingAddress?.phone || cleanPhone,
+    })
+    : null;
+
+  const requestedItems = items.map((item, index) => {
+    const quantity = Number(item?.quantity);
+    if (!item || !mongoose.isValidObjectId(item.productId) || !mongoose.isValidObjectId(item.variantId)) {
+      throw new ApiError(400, `Sản phẩm ở dòng ${index + 1} không hợp lệ.`);
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+      throw new ApiError(400, `Số lượng ở dòng ${index + 1} phải là số nguyên từ 1 đến 99.`);
+    }
+    return { productId: item.productId, variantId: item.variantId, quantity };
+  });
+  if (new Set(requestedItems.map((item) => item.variantId)).size !== requestedItems.length) {
+    throw new ApiError(400, 'Không được chọn trùng một biến thể sản phẩm trong cùng đơn hàng.');
+  }
 
   const orderItems = [];
   let subtotal = 0;
 
   // 1. Verify variant stock and build items data
-  for (const item of items) {
+  for (const item of requestedItems) {
     const product = await Product.findById(item.productId);
-    if (!product) throw new ApiError(404, 'Không tìm thấy sản phẩm.');
+    if (!product || !product.isActive) throw new ApiError(404, 'Không tìm thấy sản phẩm đang kinh doanh.');
 
-    const variant = product.variants.find(v => v._id.toString() === item.variantId);
-    if (!variant) throw new ApiError(404, 'Không tìm thấy phân loại sản phẩm.');
+    const variant = product.variants.find((variantItem) => variantItem._id.toString() === item.variantId && variantItem.isActive);
+    if (!variant) throw new ApiError(404, 'Không tìm thấy biến thể sản phẩm đang kinh doanh.');
 
     if (variant.stock < item.quantity) {
       throw new ApiError(400, `Sản phẩm ${product.name} (${variant.color}) không đủ tồn kho (còn ${variant.stock}).`);
@@ -473,25 +539,17 @@ export const createOfflineOrder = asyncHandler(async (req, res) => {
 
   // 2. Link or create profile based on email, fallback to default walk-in system account if anonymous
   let orderUserId = null;
-  const cleanEmail = email?.trim()?.toLowerCase();
-  const cleanPhone = phone?.trim();
-  const cleanCustomerName = customerName?.trim();
 
   if (userId) {
     const matchedUser = await User.findById(userId);
-    if (matchedUser) {
-      if (cleanCustomerName) matchedUser.fullName = cleanCustomerName;
-      if (cleanPhone) matchedUser.phone = cleanPhone;
-      await matchedUser.save();
-      orderUserId = matchedUser._id;
-    }
+    if (!matchedUser) throw new ApiError(404, 'Không tìm thấy khách hàng.');
+    if (cleanCustomerName) matchedUser.fullName = cleanCustomerName;
+    if (cleanPhone) matchedUser.phone = cleanPhone;
+    await matchedUser.save();
+    orderUserId = matchedUser._id;
   }
 
   if (!orderUserId && cleanEmail) {
-    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
-      throw new ApiError(400, 'Vui lòng nhập email hợp lệ.');
-    }
-
     let matchedUser = await User.findOne({ email: cleanEmail });
 
     if (matchedUser) {
@@ -566,7 +624,6 @@ export const createOfflineOrder = asyncHandler(async (req, res) => {
   const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
   const orderCode = `POS-${timestamp}-${randomStr}`;
 
-  const isShipping = deliveryMode === 'SHIPPING';
   const freeShippingThreshold = Number(process.env.FREE_SHIPPING_THRESHOLD || 15000000);
   const standardFee = Number(process.env.DEFAULT_SHIPPING_FEE || 30000);
   const shippingFee = (isShipping && subtotal < freeShippingThreshold) ? standardFee : 0;
@@ -576,16 +633,9 @@ export const createOfflineOrder = asyncHandler(async (req, res) => {
     userId: orderUserId,
     orderCode,
     items: orderItems,
-    shippingAddress: isShipping ? {
-      recipientName: customerName?.trim() || 'Khách hàng',
-      phone: phone?.trim() || '',
-      province: shippingAddress?.province?.trim() || '',
-      district: shippingAddress?.district?.trim() || '',
-      ward: shippingAddress?.ward?.trim() || '',
-      detail: shippingAddress?.detail?.trim() || ''
-    } : {
-      recipientName: customerName?.trim() || 'Khách vãng lai',
-      phone: phone?.trim() || '',
+    shippingAddress: isShipping ? validatedShippingAddress : {
+      recipientName: cleanCustomerName || 'Khách vãng lai',
+      phone: cleanPhone,
       province: 'Tại quầy',
       district: 'Tại quầy',
       ward: 'Tại quầy',
@@ -623,9 +673,9 @@ export const lookupCustomer = asyncHandler(async (req, res) => {
   const { email, phone } = req.query;
   const query = {};
   if (email?.trim()) {
-    query.email = email.trim().toLowerCase();
+    query.email = validateEmail(email);
   } else if (phone?.trim()) {
-    query.phone = phone.trim();
+    query.phone = validatePhone(phone);
   } else {
     return res.json({ data: [] });
   }

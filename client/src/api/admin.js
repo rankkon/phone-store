@@ -21,6 +21,11 @@ export const productApi = {
   deleteImage: (id, imageId) => api.delete(`/admin/products/${id}/images/${imageId}`),
 };
 
+export const inventoryApi = {
+  history: (productId, variantId, params) => api.get(`/admin/products/${productId}/variants/${variantId}/stock-history`, { params }),
+  adjust: (productId, variantId, payload) => api.patch(`/admin/products/${productId}/variants/${variantId}/stock`, payload),
+};
+
 export const userApi = {
   list: (params) => api.get('/admin/users', { params }),
   create: (payload) => api.post('/admin/users', payload),
@@ -46,3 +51,8 @@ export const voucherAdminApi = {
   remove: (id) => api.delete(`/admin/vouchers/${id}`),
 };
 
+export const reviewAdminApi = {
+  list: (params) => api.get('/admin/reviews', { params }),
+  setVisibility: (id, isVisible, note) => api.patch(`/admin/reviews/${id}/visibility`, { isVisible, note }),
+  reply: (id, content) => api.patch(`/admin/reviews/${id}/reply`, { content }),
+};

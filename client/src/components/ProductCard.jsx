@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import FavoriteButton from './FavoriteButton';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
@@ -10,6 +11,7 @@ export default function ProductCard({ product }) {
 
   return (
     <article className="product-card">
+      <FavoriteButton productId={product._id} className="product-card__favorite" />
       <Link className="product-image" to={`/products/${product.slug}`}>
         {image ? <img src={image.url} alt={image.alt || product.name} /> : <span>PHONE</span>}
       </Link>

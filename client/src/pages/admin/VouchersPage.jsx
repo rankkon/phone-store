@@ -3,6 +3,7 @@ import { voucherAdminApi } from '../../api/admin';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
+import { useFeedback } from '../../context/FeedbackContext';
 
 const initialVoucher = {
   code: '', type: 'PERCENT', value: '', minOrderValue: '0', maxDiscount: '',
@@ -35,6 +36,7 @@ function formatMoney(value) {
 }
 
 export default function VouchersPage() {
+  const { confirm, notify } = useFeedback();
   const [vouchers, setVouchers] = useState([]);
   const [form, setForm] = useState(initialVoucher);
   const [editingId, setEditingId] = useState(null);
@@ -98,15 +100,19 @@ export default function VouchersPage() {
   }
 
   async function removeVoucher(voucher) {
-    if (!window.confirm(`Xóa voucher ${voucher.code}?`)) return;
+    const confirmed = await confirm({ title: `Xóa voucher ${voucher.code}?`, message: 'Voucher sẽ bị xóa vĩnh viễn và không thể khôi phục.', confirmLabel: 'Xóa voucher', tone: 'danger' });
+    if (!confirmed) return;
     setError('');
     try {
       await voucherAdminApi.remove(voucher._id);
       if (editingId === voucher._id) resetForm();
       setMessage('Đã xóa voucher.');
+      notify('Đã xóa voucher.');
       await loadVouchers();
     } catch (requestError) {
-      setError(getApiError(requestError));
+      const message = getApiError(requestError);
+      setError(message);
+      notify(message, { type: 'error' });
     }
   }
 

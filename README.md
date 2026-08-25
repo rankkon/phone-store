@@ -175,7 +175,7 @@ Sau khi MongoDB đã kết nối được, chạy một lần:
 npm run seed --prefix server
 ```
 
-Lệnh seed không xóa dữ liệu hiện có. Nó chỉ tạo hãng, sản phẩm và voucher `WELCOME10` nếu chúng chưa tồn tại.
+Lệnh seed không xóa hoặc ghi đè dữ liệu hiện có. Nó bổ sung idempotent 10 hãng, 14 sản phẩm với nhiều biến thể RAM/bộ nhớ/màu, 8 voucher, 8 Customer mẫu và 22 đơn lịch sử năm 2026 để kiểm thử dashboard doanh thu, lợi nhuận, trạng thái đơn và CRM. Chạy lại lệnh sẽ không nhân bản dữ liệu.
 
 ## 5. Chạy dự án
 

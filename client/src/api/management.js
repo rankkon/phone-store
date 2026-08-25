@@ -11,3 +11,8 @@ export const managementOrderApi = {
   createOffline: (payload) => api.post('/management/orders/offline', payload),
   lookupCustomer: (params) => api.get('/management/orders/customer-lookup', { params }),
 };
+
+export const managementReturnApi = {
+  list: (params) => api.get('/management/returns', { params }),
+  updateStatus: (id, status, note) => api.patch(`/management/returns/${id}/status`, { status, note }),
+};

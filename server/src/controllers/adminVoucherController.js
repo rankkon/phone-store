@@ -1,6 +1,7 @@
 import Voucher from '../models/Voucher.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { createNotificationsForRoles } from '../services/notificationService.js';
 
 const editableFields = ['code', 'type', 'value', 'minOrderValue', 'maxDiscount', 'startAt', 'endAt', 'usageLimit', 'isActive'];
 
@@ -94,6 +95,14 @@ export const createVoucher = asyncHandler(async (req, res) => {
   const voucher = new Voucher(normalizeVoucherInput(req.body, { creating: true }));
   validateVoucherRules(voucher);
   await voucher.save();
+  if (voucher.isActive) {
+    await createNotificationsForRoles(['CUSTOMER'], {
+      type: 'VOUCHER',
+      title: 'Có ưu đãi mới',
+      message: `Voucher ${voucher.code} đã sẵn sàng. Hãy xem điều kiện áp dụng trước khi sử dụng.`,
+      link: '/my-vouchers',
+    });
+  }
   res.status(201).json({ message: 'Đã tạo voucher.', data: voucher });
 });
 

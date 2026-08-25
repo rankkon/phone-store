@@ -2,6 +2,7 @@ import { calculatePricing, getCartDetails, getValidVoucher } from '../services/p
 import Voucher from '../models/Voucher.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { validateCode } from '../utils/inputValidation.js';
 
 export const validateVoucher = asyncHandler(async (req, res) => {
   const { code } = req.body;
@@ -12,7 +13,7 @@ export const validateVoucher = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Giỏ hàng có sản phẩm không còn hợp lệ. Vui lòng cập nhật giỏ hàng.');
   }
 
-  const voucher = code?.trim() ? await getValidVoucher(code, cartData.subtotal) : null;
+  const voucher = code?.trim() ? await getValidVoucher(validateCode(code, 'Mã voucher'), cartData.subtotal) : null;
   const pricing = calculatePricing(cartData.subtotal, voucher);
   res.json({
     message: voucher ? 'Voucher hợp lệ.' : 'Đã cập nhật tạm tính.',

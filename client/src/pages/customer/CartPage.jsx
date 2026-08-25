@@ -5,8 +5,10 @@ import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
 import { currency } from '../../utils/order';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export default function CartPage() {
+  const { confirm, notify } = useFeedback();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [workingVariant, setWorkingVariant] = useState('');
@@ -25,13 +27,17 @@ export default function CartPage() {
   }
 
   async function removeItem(item) {
+    const confirmed = await confirm({ title: 'Xóa sản phẩm khỏi giỏ?', message: `Sản phẩm “${item.product?.name || 'này'}” sẽ bị xóa khỏi giỏ hàng của bạn.`, confirmLabel: 'Xóa sản phẩm', tone: 'danger' });
+    if (!confirmed) return;
     setWorkingVariant(item.variantId); setError('');
-    try { const response = await cartApi.removeItem(item.variantId); setCart(response.data.data); } catch (requestError) { setError(getApiError(requestError)); } finally { setWorkingVariant(''); }
+    try { const response = await cartApi.removeItem(item.variantId); setCart(response.data.data); notify('Đã xóa sản phẩm khỏi giỏ hàng.'); } catch (requestError) { const message = getApiError(requestError); setError(message); notify(message, { type: 'error' }); } finally { setWorkingVariant(''); }
   }
 
   async function clearAll() {
+    const confirmed = await confirm({ title: 'Xóa toàn bộ giỏ hàng?', message: 'Tất cả sản phẩm đang chọn sẽ bị xóa khỏi giỏ hàng.', confirmLabel: 'Xóa tất cả', tone: 'danger' });
+    if (!confirmed) return;
     setError('');
-    try { const response = await cartApi.clear(); setCart(response.data.data); } catch (requestError) { setError(getApiError(requestError)); }
+    try { const response = await cartApi.clear(); setCart(response.data.data); notify('Đã xóa toàn bộ giỏ hàng.'); } catch (requestError) { const message = getApiError(requestError); setError(message); notify(message, { type: 'error' }); }
   }
 
   if (loading) return <LoadingScreen />;

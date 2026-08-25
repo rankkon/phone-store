@@ -6,6 +6,7 @@ import LoadingScreen from '../../components/LoadingScreen';
 import FlashMessage from '../../components/FlashMessage';
 import { useAuth } from '../../context/AuthContext';
 import ProductReviews from '../../components/ProductReviews';
+import FavoriteButton from '../../components/FavoriteButton';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
@@ -55,7 +56,7 @@ export default function ProductDetailPage() {
       <FlashMessage type="success">{message}</FlashMessage><FlashMessage type="error">{error}</FlashMessage>
       <div className="product-detail__grid">
         <div className="product-gallery">{product.images.length > 0 ? <img src={product.images[0].url} alt={product.images[0].alt || product.name} /> : <span>PHONE</span>}</div>
-        <div className="product-info"><p className="product-brand">{product.brandId.name}</p><h1>{product.name}</h1><p className="model-code">Mã sản phẩm: {product.modelCode}</p><p className="product-description">{product.description}</p>
+        <div className="product-info"><div className="product-info__title"><div><p className="product-brand">{product.brandId.name}</p><h1>{product.name}</h1></div><FavoriteButton productId={product._id} className="favorite-button--detail" /></div><p className="model-code">Mã sản phẩm: {product.modelCode}</p><p className="product-description">{product.description}</p>
           <div className="variant-picker"><h2>Chọn phiên bản</h2>{product.variants.map((variant) => <button key={variant._id} className={variant._id === variantId ? 'variant-option variant-option--selected' : 'variant-option'} disabled={variant.stock <= 0} onClick={() => { setVariantId(variant._id); setQuantity(1); }}><span>{variant.ram} · {variant.storage} · {variant.color}</span><strong>{currency.format(variant.salePrice)}</strong>{variant.stock <= 0 && <small>Hết hàng</small>}</button>)}</div>
           {selectedVariant && <div className="purchase-row"><label>Số lượng<input type="number" min="1" max={selectedVariant.stock} value={quantity} onChange={(event) => setQuantity(Math.min(selectedVariant.stock, Math.max(1, Number(event.target.value) || 1)))} /></label><div><p className="detail-price">{currency.format(selectedVariant.salePrice)}</p><p className={selectedVariant.stock > 0 ? 'stock stock--available' : 'stock'}>{selectedVariant.stock > 0 ? `Còn ${selectedVariant.stock} sản phẩm` : 'Hết hàng'}</p></div></div>}
           <button className="button button--large" disabled={submitting || !selectedVariant || selectedVariant.stock <= 0} onClick={addToCart}>{submitting ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}</button>

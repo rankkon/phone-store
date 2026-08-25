@@ -4,6 +4,7 @@ import { brandApi, productApi } from '../../api/admin';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
+import { useFeedback } from '../../context/FeedbackContext';
 
 const blankVariant = () => ({ sku: '', ram: '', storage: '', color: '', costPrice: '', salePrice: '', stock: 0, isActive: true });
 const ramPresets = ['4GB', '6GB', '8GB', '12GB', '16GB', '18GB', '24GB'];
@@ -15,6 +16,7 @@ const initialForm = () => ({
 });
 
 export default function ProductFormPage() {
+  const { confirm, notify } = useFeedback();
   const { id } = useParams();
   const isEditing = Boolean(id);
   const navigate = useNavigate();
@@ -65,7 +67,6 @@ export default function ProductFormPage() {
         ...form,
         variants: form.variants.map((source) => {
           const variant = { ...source };
-          delete variant._id;
           return {
             ...variant,
             costPrice: Number(variant.costPrice), salePrice: Number(variant.salePrice), stock: Number(variant.stock),
@@ -85,10 +86,13 @@ export default function ProductFormPage() {
   }
 
   async function deleteImage(image) {
+    const confirmed = await confirm({ title: 'Xóa ảnh sản phẩm?', message: 'Ảnh này sẽ bị xóa vĩnh viễn khỏi sản phẩm.', confirmLabel: 'Xóa ảnh', tone: 'danger' });
+    if (!confirmed) return;
     try {
       const response = await productApi.deleteImage(id, image._id);
       setImages(response.data.data.images);
-    } catch (requestError) { setError(getApiError(requestError)); }
+      notify('Đã xóa ảnh sản phẩm.');
+    } catch (requestError) { const message = getApiError(requestError); setError(message); notify(message, { type: 'error' }); }
   }
 
   if (loading) return <LoadingScreen />;
@@ -116,7 +120,7 @@ export default function ProductFormPage() {
           </div>
         </section>
         <section className="panel form-stack">
-          <div className="section-heading"><div><h2>Biến thể</h2><p>Mỗi SKU là duy nhất; giá nhập, giá bán và tồn kho được quản lý theo từng biến thể.</p></div><button type="button" className="button button--secondary" onClick={() => setForm({ ...form, variants: [...form.variants, blankVariant()] })}>+ Thêm biến thể</button></div>
+          <div className="section-heading"><div><h2>Biến thể</h2><p>Mỗi SKU là duy nhất; giá nhập và giá bán được quản lý theo từng biến thể. Khi đang chỉnh sửa sản phẩm, hãy dùng mục Tồn kho để thay đổi số lượng và lưu nguyên nhân.</p></div><div className="button-row">{isEditing && <Link className="button button--ghost" to="/admin/inventory">Quản lý tồn kho</Link>}<button type="button" className="button button--secondary" onClick={() => setForm({ ...form, variants: [...form.variants, blankVariant()] })}>+ Thêm biến thể</button></div></div>
           {form.variants.map((variant, index) => <fieldset className="variant-card" key={variant._id || index}><legend>Biến thể {index + 1}</legend><div className="variant-grid">
             <label>SKU<input value={variant.sku} onChange={(event) => updateVariant(index, 'sku', event.target.value)} required /></label>
             <label>RAM<input list="ram-presets" placeholder="Chọn hoặc nhập, ví dụ: 8GB" value={variant.ram} onChange={(event) => updateVariant(index, 'ram', event.target.value)} required /></label>
@@ -124,9 +128,9 @@ export default function ProductFormPage() {
             <label>Màu sắc<input value={variant.color} onChange={(event) => updateVariant(index, 'color', event.target.value)} required /></label>
             <label>Giá nhập (VND)<input type="number" min="0" value={variant.costPrice} onChange={(event) => updateVariant(index, 'costPrice', event.target.value)} required /></label>
             <label>Giá bán (VND)<input type="number" min="0" value={variant.salePrice} onChange={(event) => updateVariant(index, 'salePrice', event.target.value)} required /></label>
-            <label>Tồn kho<input type="number" min="0" step="1" value={variant.stock} onChange={(event) => updateVariant(index, 'stock', event.target.value)} required /></label>
+            <label>Tồn kho<input type="number" min="0" step="1" value={variant.stock} onChange={(event) => updateVariant(index, 'stock', event.target.value)} required readOnly={isEditing} />{isEditing && <small className="field-help">Điều chỉnh tại trang Tồn kho.</small>}</label>
             <label className="checkbox-label"><input type="checkbox" checked={variant.isActive !== false} onChange={(event) => updateVariant(index, 'isActive', event.target.checked)} />Đang bán</label>
-          </div>{form.variants.length > 1 && <button type="button" className="danger-link" onClick={() => removeVariant(index)}>Xóa biến thể này</button>}</fieldset>)}
+          </div>{form.variants.length > 1 && (!isEditing || !variant._id) && <button type="button" className="danger-link" onClick={() => removeVariant(index)}>Xóa biến thể này</button>}</fieldset>)}
         </section>
         <section className="panel form-stack">
           <h2>Ảnh sản phẩm</h2>

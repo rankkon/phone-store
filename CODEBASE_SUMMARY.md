@@ -14,7 +14,8 @@ Tài liệu ngắn để nắm implementation hiện có. Yêu cầu, quyết đ
 - Customer có giỏ hàng, voucher, trang “Ưu đãi của tôi”, checkout COD hoặc VNPay, lịch sử/chi tiết đơn, tiếp tục thanh toán VNPay cho đơn đang chờ và yêu cầu hủy đơn.
 - Có menu tài khoản dạng dropdown, trang Về chúng tôi/Liên hệ và footer điều hướng, hỗ trợ khách hàng, thông tin liên hệ.
 - Staff/Admin xem, tìm kiếm, lọc, cập nhật trạng thái đơn và duyệt/từ chối yêu cầu hủy. Admin có dashboard, quản lý người dùng và CRUD voucher.
-- Backend tự bảo đảm ba tài khoản demo khi khởi động; lệnh seed thêm catalog và voucher `WELCOME10` theo cách idempotent.
+- Backend tự bảo đảm ba tài khoản demo khi khởi động; lệnh seed bổ sung idempotent catalog phong phú (10 hãng, 14 sản phẩm đa biến thể), 8 voucher, 8 Customer và 22 đơn lịch sử để có dữ liệu dashboard/CRM.
+- Các luồng nhập quan trọng được kiểm tra ở cả frontend và backend: họ tên chỉ nhận chữ cái hợp lệ, số điện thoại 9–15 chữ số, email/mật khẩu, địa chỉ, voucher, biến thể/giá/tồn kho, số lượng giỏ hàng/POS và nhận xét.
 
 Chưa có trong source: ảnh đại diện, hoàn trả, test tự động và cấu hình triển khai. Gửi email đặt lại mật khẩu cần cấu hình SMTP trong `server/.env`.
 

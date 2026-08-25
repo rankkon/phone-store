@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useLocation } from 'react-router-dom';
-import { orderApi } from '../../api/store';
+import { orderApi, returnApi } from '../../api/store';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
-import { currency, formatDate, orderStatusLabels } from '../../utils/order';
+import { currency, formatDate, orderStatusLabels, returnStatusLabels } from '../../utils/order';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export default function OrderDetailPage() {
   const { orderCode } = useParams();
@@ -14,24 +15,51 @@ export default function OrderDetailPage() {
   const paymentCode = searchParams.get('code');
 
   const [order, setOrder] = useState(null);
+  const [returnRequest, setReturnRequest] = useState(null);
   const [error, setError] = useState('');
   const [canceling, setCanceling] = useState(false);
   const [retryingPayment, setRetryingPayment] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelSuccess, setCancelSuccess] = useState('');
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const { confirm, notify } = useFeedback();
 
   useEffect(() => {
-    orderApi.getMine(orderCode).then((response) => setOrder(response.data.data)).catch((requestError) => setError(getApiError(requestError)));
+    let cancelled = false;
+    setOrder(null);
+    setReturnRequest(null);
+    setError('');
+    async function loadOrder() {
+      try {
+        const response = await orderApi.getMine(orderCode);
+        if (cancelled) return;
+        const currentOrder = response.data.data;
+        setOrder(currentOrder);
+        try {
+          const returnResponse = await returnApi.getForOrder(currentOrder._id);
+          if (!cancelled) setReturnRequest(returnResponse.data.data);
+        } catch (requestError) {
+          if (!cancelled && requestError.response?.status !== 404) setError(getApiError(requestError));
+        }
+      } catch (requestError) {
+        if (!cancelled) setError(getApiError(requestError));
+      }
+    }
+    loadOrder();
 
     if (paymentStatus === 'success') {
       setCancelSuccess('Thanh toán trực tuyến qua VNPay thành công!');
     } else if (paymentStatus === 'fail') {
       setCancelError(`Thanh toán thất bại hoặc đã bị hủy. ${paymentCode ? `(Mã lỗi VNPay: ${paymentCode})` : ''}`);
     }
+    return () => { cancelled = true; };
   }, [orderCode, paymentStatus, paymentCode]);
 
-  const handleCancelRequest = () => {
-    if (!window.confirm('Bạn có chắc chắn muốn gửi yêu cầu hủy đơn hàng này không?')) return;
+  const handleCancelRequest = async () => {
+    const confirmed = await confirm({ title: 'Gửi yêu cầu hủy đơn?', message: 'Cửa hàng sẽ xem xét yêu cầu trước khi hủy đơn hàng.', confirmLabel: 'Gửi yêu cầu', tone: 'danger' });
+    if (!confirmed) return;
     setCanceling(true);
     setCancelError('');
     setCancelSuccess('');
@@ -39,10 +67,12 @@ export default function OrderDetailPage() {
       .then((response) => {
         setOrder(response.data.data);
         setCancelSuccess('Gửi yêu cầu hủy đơn thành công.');
+        notify('Đã gửi yêu cầu hủy đơn.');
         setCanceling(false);
       })
       .catch((err) => {
         setCancelError(getApiError(err));
+        notify(getApiError(err), { type: 'error' });
         setCanceling(false);
       });
   };
@@ -60,6 +90,27 @@ export default function OrderDetailPage() {
         setCancelError(getApiError(requestError));
         setRetryingPayment(false);
       });
+  };
+
+  const handleReturnRequest = (event) => {
+    event.preventDefault();
+    if (returnReason.trim().length < 5) {
+      setCancelError('Vui lòng nêu lý do hoàn trả từ 5 ký tự trở lên.');
+      return;
+    }
+    setReturnSubmitting(true);
+    setCancelError('');
+    setCancelSuccess('');
+    returnApi.create(order._id, { reason: returnReason })
+      .then((response) => {
+        setReturnRequest(response.data.data);
+        setReturnReason('');
+        setShowReturnForm(false);
+        setCancelSuccess(response.data.message);
+        notify(response.data.message);
+      })
+      .catch((requestError) => { const message = getApiError(requestError); setCancelError(message); notify(message, { type: 'error' }); })
+      .finally(() => setReturnSubmitting(false));
   };
 
   if (!order && !error) return <LoadingScreen />;
@@ -138,6 +189,15 @@ export default function OrderDetailPage() {
               </button>
             </div>
           )}
+
+          {order.status === 'COMPLETED' && !returnRequest && (
+            <div style={{ marginTop: '1.5rem' }}>
+              <button className="button button--secondary" onClick={() => { setShowReturnForm(true); setCancelError(''); }} style={{ width: '100%' }}>
+                Yêu cầu hoàn trả
+              </button>
+            </div>
+          )}
+          {returnRequest && <div className="return-summary"><span className={`return-status return-status--${returnRequest.status.toLowerCase()}`}>{returnStatusLabels[returnRequest.status]}</span><p>Yêu cầu hoàn trả đã được gửi.</p><Link to="/returns">Xem lịch sử xử lý →</Link></div>}
         </aside>
       </div>
       <div className="order-detail__grid">
@@ -160,6 +220,8 @@ export default function OrderDetailPage() {
           </ol>
         </section>
       </div>
+      {returnRequest && <section className="panel return-detail-panel"><div className="profile-editor__heading"><div><p className="eyebrow">HOÀN TRẢ</p><h2>Tiến trình yêu cầu</h2></div><span className={`return-status return-status--${returnRequest.status.toLowerCase()}`}>{returnStatusLabels[returnRequest.status]}</span></div><p><strong>Lý do:</strong> {returnRequest.reason}</p><ol className="return-history">{returnRequest.statusHistory.map((entry, index) => <li key={`${entry.status}-${entry.changedAt}-${index}`}><strong>{returnStatusLabels[entry.status] || entry.status}</strong><span>{formatDate(entry.changedAt)}{entry.changedBy?.fullName ? ` · ${entry.changedBy.fullName}` : ''}</span>{entry.note && <p>{entry.note}</p>}</li>)}</ol></section>}
+      {showReturnForm && <div className="modal" role="presentation"><form className="modal-content form-stack" onSubmit={handleReturnRequest}><div className="profile-editor__heading"><div><p className="eyebrow">HOÀN TRẢ</p><h2>Gửi yêu cầu hoàn trả</h2></div><button type="button" className="text-button" onClick={() => setShowReturnForm(false)} disabled={returnSubmitting}>Đóng</button></div><p className="form-hint">Hãy mô tả rõ lý do. Cửa hàng sẽ xem xét và cập nhật kết quả tại trang này.</p><label>Lý do hoàn trả<textarea rows="5" minLength="5" maxLength="1000" value={returnReason} onChange={(event) => setReturnReason(event.target.value)} required /></label><div className="button-row"><button className="button button--secondary" disabled={returnSubmitting}>{returnSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}</button><button type="button" className="button button--ghost" onClick={() => setShowReturnForm(false)} disabled={returnSubmitting}>Hủy</button></div></form></div>}
     </section>
   );
 }

@@ -12,5 +12,11 @@ export const authApi = {
   sendPasswordChangeCode: () => api.post('/auth/password-change-code'),
   getMe: () => api.get('/auth/me'),
   updateProfile: (payload) => api.patch('/auth/profile', payload),
+  uploadAvatar: (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.put('/auth/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteAvatar: () => api.delete('/auth/avatar'),
   changePassword: (payload) => api.patch('/auth/change-password', payload),
 };

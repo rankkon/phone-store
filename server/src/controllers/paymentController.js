@@ -7,8 +7,8 @@ import Voucher from '../models/Voucher.js';
 import { calculatePricing, getCartDetails, getValidVoucher } from '../services/pricingService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-
-const addressFields = ['recipientName', 'phone', 'province', 'district', 'ward', 'detail'];
+import { validateAddress, validateNote } from '../utils/inputValidation.js';
+import { createNotification } from '../services/notificationService.js';
 
 function withSession(query, session) {
   return session ? query.session(session) : query;
@@ -20,16 +20,6 @@ function buildOrderCode() {
 
 function buildVnpayRequestRef() {
   return `VNP${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
-}
-
-function normalizeAddress(rawAddress) {
-  if (!rawAddress || typeof rawAddress !== 'object') throw new ApiError(400, 'Vui lòng nhập đầy đủ địa chỉ nhận hàng.');
-  const address = {};
-  for (const field of addressFields) {
-    if (!rawAddress[field]?.trim()) throw new ApiError(400, 'Vui lòng nhập đầy đủ địa chỉ nhận hàng.');
-    address[field] = rawAddress[field].trim();
-  }
-  return address;
 }
 
 async function transactionSupported() {
@@ -132,7 +122,7 @@ async function restoreStock(order, session) {
 // POST /api/payments/vnpay/create
 export const createVnpayPayment = asyncHandler(async (req, res) => {
   const vnpayConfig = getVnpayConfig();
-  const shippingAddress = normalizeAddress(req.body.shippingAddress);
+  const shippingAddress = validateAddress(req.body.shippingAddress);
   const { note, voucherCode } = req.body;
   const userId = req.user._id;
 
@@ -183,7 +173,7 @@ export const createVnpayPayment = asyncHandler(async (req, res) => {
       userId,
       items: orderItems,
       shippingAddress,
-      note: note?.trim() || '',
+      note: validateNote(note),
       pricing,
       voucher: voucher ? { code: voucher.code, type: voucher.type, value: voucher.value } : null,
       payment: { method: 'VNPAY', status: 'UNPAID', requestRefs: [buildVnpayRequestRef()] },
@@ -209,6 +199,14 @@ export const createVnpayPayment = asyncHandler(async (req, res) => {
   } else {
     result = await executeCreateOrder(null);
   }
+
+  await createNotification({
+    userId,
+    type: 'PAYMENT',
+    title: 'Đơn hàng đang chờ thanh toán',
+    message: `Đơn ${result.order.orderCode} đã được tạo. Vui lòng hoàn tất thanh toán VNPay.`,
+    link: `/orders/${result.order.orderCode}`,
+  });
 
   res.status(201).json({
     message: 'Khởi tạo thanh toán VNPay thành công.',
@@ -328,6 +326,16 @@ export const vnpayReturn = asyncHandler(async (req, res) => {
   } else {
     await executeUpdate(null);
   }
+
+  await createNotification({
+    userId: order.userId,
+    type: 'PAYMENT',
+    title: isSuccessfulPayment ? 'Thanh toán VNPay thành công' : 'Thanh toán VNPay chưa thành công',
+    message: isSuccessfulPayment
+      ? `Đơn ${order.orderCode} đã được xác nhận thanh toán.`
+      : `Thanh toán cho đơn ${order.orderCode} không thành công. Bạn có thể kiểm tra lại đơn hàng.`,
+    link: `/orders/${order.orderCode}`,
+  });
 
   if (isSuccessfulPayment) {
     res.redirect(`${orderUrl}?payment=success`);

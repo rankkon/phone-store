@@ -5,10 +5,14 @@ import { useAuth } from '../../context/AuthContext';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
+import UserAvatar from '../../components/UserAvatar';
+import { isValidPersonName, isValidPhone, onlyDigits, onlyPersonName } from '../../utils/input';
 import { formatDate } from '../../utils/order';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
+  const { confirm, notify } = useFeedback();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -55,8 +59,12 @@ export default function UsersPage() {
 
   const handleUpdateProfile = (e) => {
     e.preventDefault();
-    if (!editFullName.trim()) {
-      setEditError('Họ tên không được để trống.');
+    if (!isValidPersonName(editFullName)) {
+      setEditError('Họ tên chỉ gồm chữ cái, dài từ 2 đến 100 ký tự.');
+      return;
+    }
+    if (!isValidPhone(editPhone)) {
+      setEditError('Số điện thoại chỉ gồm 9–15 chữ số.');
       return;
     }
     setEditSubmitting(true);
@@ -113,16 +121,23 @@ export default function UsersPage() {
     setPage(1);
   };
 
-  const handleToggleStatus = (targetUser) => {
+  const handleToggleStatus = async (targetUser) => {
     const nextStatus = targetUser.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
     const actionText = nextStatus === 'BLOCKED' ? 'khóa' : 'mở khóa';
 
     let reason = '';
     if (nextStatus === 'BLOCKED') {
-      reason = window.prompt(`Vui lòng nhập lý do khóa tài khoản của ${targetUser.fullName}:`, 'Vi phạm điều khoản hệ thống');
-      if (reason === null) return; // Hủy
+      reason = await confirm({
+        title: `Khóa tài khoản ${targetUser.fullName}?`,
+        message: 'Tài khoản sẽ không thể đăng nhập hay tiếp tục sử dụng hệ thống cho đến khi được mở khóa.',
+        confirmLabel: 'Khóa tài khoản',
+        tone: 'danger',
+        input: { label: 'Lý do khóa', defaultValue: 'Vi phạm điều khoản hệ thống', required: true, minLength: 3 },
+      });
+      if (!reason) return;
     } else {
-      if (!window.confirm(`Bạn có chắc muốn mở khóa tài khoản của ${targetUser.fullName}?`)) return;
+      const confirmed = await confirm({ title: `Mở khóa tài khoản ${targetUser.fullName}?`, message: 'Người dùng sẽ có thể đăng nhập và sử dụng lại tài khoản.', confirmLabel: 'Mở khóa', tone: 'info' });
+      if (!confirmed) return;
     }
 
     setActionError('');
@@ -131,15 +146,19 @@ export default function UsersPage() {
     userApi.updateStatus(targetUser._id, nextStatus, reason)
       .then(() => {
         setActionSuccess(`Đã ${actionText} thành công tài khoản: ${targetUser.email}`);
+        notify(`Đã ${actionText} tài khoản ${targetUser.email}.`);
         fetchUsers();
       })
       .catch((err) => {
-        setActionError(getApiError(err));
+        const message = getApiError(err);
+        setActionError(message);
+        notify(message, { type: 'error' });
       });
   };
 
-  const handleChangeRole = (targetUser, nextRole) => {
-    if (!window.confirm(`Bạn có chắc muốn đổi vai trò của ${targetUser.fullName} thành ${nextRole}?`)) return;
+  const handleChangeRole = async (targetUser, nextRole) => {
+    const confirmed = await confirm({ title: 'Thay đổi vai trò tài khoản?', message: `Quyền của ${targetUser.fullName} sẽ được đổi thành ${nextRole}.`, confirmLabel: 'Đổi vai trò', tone: 'danger' });
+    if (!confirmed) return;
 
     setActionError('');
     setActionSuccess('');
@@ -147,10 +166,13 @@ export default function UsersPage() {
     userApi.updateRole(targetUser._id, nextRole)
       .then(() => {
         setActionSuccess(`Đã chuyển vai trò thành công cho ${targetUser.email} sang: ${nextRole}`);
+        notify(`Đã đổi vai trò của ${targetUser.email} sang ${nextRole}.`);
         fetchUsers();
       })
       .catch((err) => {
-        setActionError(getApiError(err));
+        const message = getApiError(err);
+        setActionError(message);
+        notify(message, { type: 'error' });
       });
   };
 
@@ -169,6 +191,14 @@ export default function UsersPage() {
 
   const handleCreateUser = (e) => {
     e.preventDefault();
+    if (!isValidPersonName(createForm.fullName)) {
+      setCreateError('Họ tên chỉ gồm chữ cái, dài từ 2 đến 100 ký tự.');
+      return;
+    }
+    if (createForm.password.length < 8) {
+      setCreateError('Mật khẩu phải có ít nhất 8 ký tự.');
+      return;
+    }
     setCreateSubmitting(true);
     setCreateError('');
     userApi.create(createForm)
@@ -343,6 +373,7 @@ export default function UsersPage() {
                     <tr key={targetUser._id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'middle' }}>
                       <td style={{ padding: '0.6rem 0.75rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <UserAvatar user={targetUser} size="sm" />
                           <span
                             onClick={() => handleOpenLtvModal(targetUser._id)}
                             style={{ cursor: 'pointer', color: '#1a73e8', fontWeight: '700', textDecoration: 'none', hover: { textDecoration: 'underline' } }}
@@ -475,7 +506,9 @@ export default function UsersPage() {
                   type="text"
                   required
                   value={createForm.fullName}
-                  onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
+                  onChange={(e) => setCreateForm({ ...createForm, fullName: onlyPersonName(e.target.value) })}
+                  minLength="2"
+                  maxLength="100"
                   style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                 />
               </div>
@@ -494,6 +527,7 @@ export default function UsersPage() {
                 <input
                   type="password"
                   required
+                  minLength="8"
                   value={createForm.password}
                   onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
@@ -584,7 +618,9 @@ export default function UsersPage() {
                   type="text"
                   required
                   value={editFullName}
-                  onChange={(e) => setEditFullName(e.target.value)}
+                  onChange={(e) => setEditFullName(onlyPersonName(e.target.value))}
+                  minLength="2"
+                  maxLength="100"
                   style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                 />
               </div>
@@ -600,9 +636,11 @@ export default function UsersPage() {
               <div>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>Số điện thoại</label>
                 <input
-                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{9,15}"
+                  maxLength="15"
                   value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
+                  onChange={(e) => setEditPhone(onlyDigits(e.target.value))}
                   style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                 />
               </div>

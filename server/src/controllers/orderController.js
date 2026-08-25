@@ -7,8 +7,8 @@ import Voucher from '../models/Voucher.js';
 import { calculatePricing, getCartDetails, getValidVoucher } from '../services/pricingService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-
-const addressFields = ['recipientName', 'phone', 'province', 'district', 'ward', 'detail'];
+import { validateAddress, validateNote } from '../utils/inputValidation.js';
+import { createNotification, createNotificationsForRoles } from '../services/notificationService.js';
 
 function withSession(query, session) {
   return session ? query.session(session) : query;
@@ -16,16 +16,6 @@ function withSession(query, session) {
 
 function buildOrderCode() {
   return `PS-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-}
-
-function normalizeAddress(rawAddress) {
-  if (!rawAddress || typeof rawAddress !== 'object') throw new ApiError(400, 'Vui lòng nhập đầy đủ địa chỉ nhận hàng.');
-  const address = {};
-  for (const field of addressFields) {
-    if (!rawAddress[field]?.trim()) throw new ApiError(400, 'Vui lòng nhập đầy đủ địa chỉ nhận hàng.');
-    address[field] = rawAddress[field].trim();
-  }
-  return address;
 }
 
 async function transactionSupported() {
@@ -79,7 +69,7 @@ async function createOrder(userId, { shippingAddress, note, voucherCode }, sessi
     userId,
     items: orderItems,
     shippingAddress,
-    note: note?.trim() || '',
+    note: validateNote(note),
     pricing,
     voucher: voucher ? { code: voucher.code, type: voucher.type, value: voucher.value } : null,
     payment: { method: 'COD', status: 'UNPAID' },
@@ -110,8 +100,15 @@ export const createCodOrder = asyncHandler(async (req, res) => {
   if (req.body.paymentMethod && req.body.paymentMethod !== 'COD') {
     throw new ApiError(400, 'Hiện hệ thống chỉ hỗ trợ thanh toán COD.');
   }
-  const shippingAddress = normalizeAddress(req.body.shippingAddress);
+  const shippingAddress = validateAddress(req.body.shippingAddress);
   const order = await placeOrder(req.user._id, { shippingAddress, note: req.body.note, voucherCode: req.body.voucherCode });
+  await createNotification({
+    userId: req.user._id,
+    type: 'ORDER',
+    title: 'Đặt hàng thành công',
+    message: `Đơn hàng ${order.orderCode} đã được tạo và đang chờ xác nhận.`,
+    link: `/orders/${order.orderCode}`,
+  });
   res.status(201).json({ message: 'Đặt hàng thành công.', data: order });
 });
 
@@ -146,12 +143,18 @@ export const requestCancelOrder = asyncHandler(async (req, res) => {
   order.status = 'CANCEL_REQUESTED';
   order.statusHistory.push({
     status: 'CANCEL_REQUESTED',
-    note: req.body.note?.trim() || 'Khách hàng yêu cầu hủy đơn.',
+    note: validateNote(req.body.note) || 'Khách hàng yêu cầu hủy đơn.',
     changedBy: req.user._id,
     changedAt: new Date(),
   });
 
   await order.save();
+  await createNotificationsForRoles(['ADMIN', 'STAFF'], {
+    type: 'CANCEL',
+    title: 'Có yêu cầu hủy đơn',
+    message: `Khách hàng đã gửi yêu cầu hủy đơn ${order.orderCode}.`,
+    link: `/admin/orders/${order._id}`,
+  });
   res.json({ message: 'Gửi yêu cầu hủy đơn thành công.', data: order });
 });
 

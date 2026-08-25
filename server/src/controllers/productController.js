@@ -1,27 +1,41 @@
 import Product from '../models/Product.js';
 import Brand from '../models/Brand.js';
+import mongoose from 'mongoose';
 import { cloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { cleanText, validateCode, validateFreeText } from '../utils/inputValidation.js';
+import { recordInitialStock } from '../services/stockHistoryService.js';
 
 const specificationFields = ['chip', 'battery', 'screen', 'rearCamera', 'frontCamera', 'operatingSystem'];
-const productFields = ['name', 'modelCode', 'brandId', 'description', 'isActive'];
-
 function parseVariant(rawVariant) {
+  if (!rawVariant || typeof rawVariant !== 'object' || Array.isArray(rawVariant)) {
+    throw new ApiError(400, 'Thông tin biến thể không hợp lệ.');
+  }
+  if (rawVariant.isActive !== undefined && typeof rawVariant.isActive !== 'boolean') {
+    throw new ApiError(400, 'Trạng thái biến thể phải là true hoặc false.');
+  }
   const variant = {
-    sku: rawVariant.sku?.trim().toUpperCase(),
-    ram: rawVariant.ram?.trim(),
-    storage: rawVariant.storage?.trim(),
-    color: rawVariant.color?.trim(),
+    sku: validateCode(rawVariant.sku, 'SKU', { minLength: 3, maxLength: 50 }),
+    ram: String(rawVariant.ram || '').trim().toUpperCase(),
+    storage: String(rawVariant.storage || '').trim().toUpperCase(),
+    color: cleanText(rawVariant.color, 'Màu sắc', { required: true, minLength: 2, maxLength: 50 }),
     costPrice: Number(rawVariant.costPrice),
     salePrice: Number(rawVariant.salePrice),
     stock: Number(rawVariant.stock),
     isActive: rawVariant.isActive !== false,
   };
 
+  if (rawVariant._id !== undefined) {
+    if (!mongoose.isValidObjectId(rawVariant._id)) throw new ApiError(400, 'Mã biến thể không hợp lệ.');
+    variant._id = new mongoose.Types.ObjectId(rawVariant._id);
+  }
+
   if (!variant.sku || !variant.ram || !variant.storage || !variant.color) {
     throw new ApiError(400, 'Mỗi biến thể cần SKU, RAM, bộ nhớ trong và màu sắc.');
   }
+  if (!/^\d{1,2}GB$/.test(variant.ram)) throw new ApiError(400, 'RAM phải theo định dạng như 8GB hoặc 12GB.');
+  if (!/^(\d{2,4}GB|1TB|2TB)$/.test(variant.storage)) throw new ApiError(400, 'Bộ nhớ trong phải theo định dạng như 128GB, 256GB hoặc 1TB.');
   if (!Number.isFinite(variant.costPrice) || variant.costPrice < 0) throw new ApiError(400, 'Giá nhập phải là số không âm.');
   if (!Number.isFinite(variant.salePrice) || variant.salePrice < 0) throw new ApiError(400, 'Giá bán phải là số không âm.');
   if (!Number.isInteger(variant.stock) || variant.stock < 0) throw new ApiError(400, 'Tồn kho phải là số nguyên không âm.');
@@ -48,20 +62,25 @@ async function validateVariants(rawVariants, currentProductId) {
 }
 
 async function requireBrand(brandId) {
+  if (!mongoose.isValidObjectId(brandId)) throw new ApiError(400, 'Mã hãng không hợp lệ.');
   const brand = await Brand.findById(brandId);
   if (!brand) throw new ApiError(400, 'Hãng được chọn không tồn tại.');
   return brand;
 }
 
 function applyProductFields(product, body) {
-  for (const field of productFields) {
-    if (body[field] !== undefined) {
-      product[field] = typeof body[field] === 'string' ? body[field].trim() : body[field];
-    }
+  if (body.name !== undefined) product.name = cleanText(body.name, 'Tên sản phẩm', { required: true, minLength: 2, maxLength: 180 });
+  if (body.modelCode !== undefined) product.modelCode = validateCode(body.modelCode, 'Mã sản phẩm', { minLength: 3, maxLength: 50, pattern: /^[A-Z0-9-]+$/ });
+  if (body.description !== undefined) product.description = validateFreeText(body.description, 'Mô tả', { maxLength: 2000 });
+  if (body.isActive !== undefined) {
+    if (typeof body.isActive !== 'boolean') throw new ApiError(400, 'isActive phải là true hoặc false.');
+    product.isActive = body.isActive;
   }
   if (body.specifications && typeof body.specifications === 'object') {
     for (const field of specificationFields) {
-      if (typeof body.specifications[field] === 'string') product.specifications[field] = body.specifications[field].trim();
+      if (typeof body.specifications[field] === 'string') {
+        product.specifications[field] = validateFreeText(body.specifications[field], 'Thông số sản phẩm', { maxLength: 120 });
+      }
     }
   }
 }
@@ -195,12 +214,25 @@ export const getAdminProduct = asyncHandler(async (req, res) => {
 export const createProduct = asyncHandler(async (req, res) => {
   const { name, modelCode, brandId, description = '', specifications = {}, isActive = true } = req.body;
   if (!name?.trim() || !modelCode?.trim() || !brandId) throw new ApiError(400, 'Tên sản phẩm, mã sản phẩm và hãng là bắt buộc.');
+  if (typeof isActive !== 'boolean') throw new ApiError(400, 'isActive phải là true hoặc false.');
   await requireBrand(brandId);
   const variants = await validateVariants(req.body.variants);
 
   const product = await Product.create({
-    name: name.trim(), modelCode: modelCode.trim(), brandId, description: description.trim(), specifications, variants, isActive,
+    name: cleanText(name, 'Tên sản phẩm', { required: true, minLength: 2, maxLength: 180 }),
+    modelCode: validateCode(modelCode, 'Mã sản phẩm', { minLength: 3, maxLength: 50, pattern: /^[A-Z0-9-]+$/ }),
+    brandId,
+    description: validateFreeText(description, 'Mô tả', { maxLength: 2000 }),
+    specifications: Object.fromEntries(specificationFields.map((field) => [
+      field,
+      typeof specifications?.[field] === 'string'
+        ? validateFreeText(specifications[field], 'Thông số sản phẩm', { maxLength: 120 })
+        : '',
+    ])),
+    variants,
+    isActive,
   });
+  await recordInitialStock(product, req.user._id);
   await product.populate('brandId', 'name slug isActive');
   res.status(201).json({ message: 'Đã tạo sản phẩm.', data: product });
 });
@@ -209,10 +241,34 @@ export const updateProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) throw new ApiError(404, 'Không tìm thấy sản phẩm.');
   if (req.body.brandId !== undefined) await requireBrand(req.body.brandId);
-  if (req.body.variants !== undefined) product.variants = await validateVariants(req.body.variants, product._id);
+  let addedVariants = [];
+  if (req.body.variants !== undefined) {
+    const variants = await validateVariants(req.body.variants, product._id);
+    const currentVariantIds = new Set(product.variants.map((variant) => variant._id.toString()));
+    const incomingVariantIds = new Set();
+    for (const variant of variants) {
+      if (variant._id && !currentVariantIds.has(variant._id.toString())) {
+        throw new ApiError(400, 'Biến thể không thuộc sản phẩm này.');
+      }
+      if (variant._id && incomingVariantIds.has(variant._id.toString())) {
+        throw new ApiError(400, 'Không được gửi trùng một biến thể trong dữ liệu cập nhật.');
+      }
+      if (variant._id) incomingVariantIds.add(variant._id.toString());
+      const currentVariant = variant._id ? product.variants.id(variant._id) : null;
+      if (currentVariant && currentVariant.stock !== variant.stock) {
+        throw new ApiError(400, 'Vui lòng dùng chức năng điều chỉnh tồn kho để thay đổi số lượng của biến thể.');
+      }
+    }
+    if ([...currentVariantIds].some((variantId) => !incomingVariantIds.has(variantId))) {
+      throw new ApiError(400, 'Không thể xóa hoặc thay thế biến thể hiện có từ biểu mẫu này.');
+    }
+    product.variants = variants;
+    addedVariants = product.variants.filter((variant) => !currentVariantIds.has(variant._id.toString()));
+  }
 
   applyProductFields(product, req.body);
   await product.save();
+  await recordInitialStock(product, req.user._id, addedVariants);
   await product.populate('brandId', 'name slug isActive');
   res.json({ message: 'Đã cập nhật sản phẩm.', data: product });
 });
@@ -265,6 +321,7 @@ export const addVariant = asyncHandler(async (req, res) => {
 
   product.variants.push(variant);
   await product.save();
+  await recordInitialStock(product, req.user._id, [product.variants.at(-1)]);
   res.status(201).json({ message: 'Đã thêm biến thể.', data: product });
 });
 
@@ -279,6 +336,9 @@ export const updateVariant = asyncHandler(async (req, res) => {
   }
   const duplicate = await Product.exists({ _id: { $ne: product._id }, 'variants.sku': replacement.sku });
   if (duplicate) throw new ApiError(409, 'SKU đã được dùng cho sản phẩm khác.');
+  if (replacement.stock !== existing.stock) {
+    throw new ApiError(400, 'Vui lòng dùng chức năng điều chỉnh tồn kho để thay đổi số lượng của biến thể.');
+  }
 
   existing.set(replacement);
   await product.save();

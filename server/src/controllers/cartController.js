@@ -1,4 +1,5 @@
 import Cart from '../models/Cart.js';
+import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import { getCartDetails } from '../services/pricingService.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -31,6 +32,9 @@ export const addCartItem = asyncHandler(async (req, res) => {
   const { productId, variantId } = req.body;
   const quantity = parseQuantity(req.body.quantity || 1);
   if (!productId || !variantId) throw new ApiError(400, 'productId và variantId là bắt buộc.');
+  if (!mongoose.isValidObjectId(productId) || !mongoose.isValidObjectId(variantId)) {
+    throw new ApiError(400, 'Sản phẩm hoặc biến thể không hợp lệ.');
+  }
 
   const product = await Product.findOne({ _id: productId, isActive: true });
   if (!product) throw new ApiError(404, 'Sản phẩm không tồn tại hoặc đã ngừng bán.');
@@ -52,6 +56,7 @@ export const addCartItem = asyncHandler(async (req, res) => {
 
 export const updateCartItem = asyncHandler(async (req, res) => {
   const quantity = parseQuantity(req.body.quantity);
+  if (!mongoose.isValidObjectId(req.params.variantId)) throw new ApiError(400, 'Biến thể không hợp lệ.');
   const cart = await Cart.findOne({ userId: req.user._id });
   const item = cart?.items.find((candidate) => candidate.variantId.toString() === req.params.variantId);
   if (!item) throw new ApiError(404, 'Không tìm thấy sản phẩm trong giỏ hàng.');
@@ -67,6 +72,7 @@ export const updateCartItem = asyncHandler(async (req, res) => {
 });
 
 export const removeCartItem = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.variantId)) throw new ApiError(400, 'Biến thể không hợp lệ.');
   const cart = await Cart.findOne({ userId: req.user._id });
   if (!cart) throw new ApiError(404, 'Giỏ hàng đang trống.');
   const previousLength = cart.items.length;

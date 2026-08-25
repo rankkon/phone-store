@@ -2,6 +2,13 @@ import User from '../models/User.js';
 import Order from '../models/Order.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+  validateEmail,
+  validateNote,
+  validatePassword,
+  validatePersonName,
+  validatePhone,
+} from '../utils/inputValidation.js';
 
 // GET /api/admin/users
 export const getUsers = asyncHandler(async (req, res) => {
@@ -118,15 +125,18 @@ export const createUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Vai trò không hợp lệ. Chỉ được phép tạo tài khoản STAFF hoặc ADMIN.');
   }
 
-  const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+  const normalizedName = validatePersonName(fullName);
+  const normalizedEmail = validateEmail(email);
+  validatePassword(password);
+  const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     throw new ApiError(400, 'Email này đã được sử dụng.');
   }
 
   const passwordHash = await User.hashPassword(password);
   const user = await User.create({
-    fullName: fullName.trim(),
-    email: email.toLowerCase().trim(),
+    fullName: normalizedName,
+    email: normalizedEmail,
     passwordHash,
     role,
     isEmailVerified: true,
@@ -213,7 +223,7 @@ export const exportUsersCsv = asyncHandler(async (req, res) => {
     const stats = statsMap.get(user._id.toString()) || { totalOrders: 0, completedOrders: 0, cancelledOrders: 0, ltv: 0 };
     const row = [
       `"${user.fullName.replace(/"/g, '""')}"`,
-      `"${user.email.replace(/"/g, '""')}"`,
+      `"${(user.email || '').replace(/"/g, '""')}"`,
       user.role,
       user.status === 'ACTIVE' ? 'Đang hoạt động' : 'Đã khóa',
       `"${(user.blockReason || '').replace(/"/g, '""')}"`,
@@ -248,7 +258,7 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
 
   user.status = status;
   if (status === 'BLOCKED') {
-    user.blockReason = blockReason?.trim() || 'Không có lý do cụ thể.';
+    user.blockReason = validateNote(blockReason, 'Lý do khóa', 300) || 'Không có lý do cụ thể.';
   } else {
     user.blockReason = '';
   }
@@ -284,19 +294,16 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'Không tìm thấy người dùng.');
 
-  if (typeof fullName === 'string' && fullName.trim()) {
-    user.fullName = fullName.trim();
+  if (typeof fullName === 'string') {
+    user.fullName = validatePersonName(fullName);
   }
 
   if (typeof phone === 'string') {
-    user.phone = phone.trim();
+    user.phone = validatePhone(phone);
   }
 
   if (typeof email === 'string' && email.trim()) {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
-      throw new ApiError(400, 'Vui lòng nhập email hợp lệ.');
-    }
+    const cleanEmail = validateEmail(email);
     const emailExists = await User.findOne({ email: cleanEmail, _id: { $ne: user._id } });
     if (emailExists) {
       throw new ApiError(400, 'Email này đã được sử dụng bởi người dùng khác.');

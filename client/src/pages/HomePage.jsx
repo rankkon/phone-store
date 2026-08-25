@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { catalogApi } from '../api/store';
 import ProductCard from '../components/ProductCard';
 import { getApiError } from '../api/http';
+import { useAuth } from '../context/AuthContext';
 
 export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [error, setError] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
     catalogApi.list({ limit: 4, sort: 'newest' })
@@ -21,7 +23,12 @@ export default function HomePage() {
           <p className="eyebrow">PHONE STORE</p>
           <h1>Chọn chiếc điện thoại hợp với bạn.</h1>
           <p>Khám phá điện thoại chính hãng, so sánh các phiên bản RAM, bộ nhớ trong và màu sắc trước khi đặt hàng.</p>
-          <div className="button-row"><Link className="button" to="/products">Mua sắm ngay</Link><Link className="button button--ghost" to="/register">Tạo tài khoản</Link></div>
+          <div className="button-row">
+            <Link className="button" to="/products">Khám phá sản phẩm</Link>
+            {!user && <Link className="button button--ghost" to="/register">Tạo tài khoản</Link>}
+            {user?.role === 'CUSTOMER' && <Link className="button button--ghost" to="/orders">Đơn hàng của tôi</Link>}
+            {(user?.role === 'ADMIN' || user?.role === 'STAFF') && <Link className="button button--ghost" to="/admin">Vào khu vực quản trị</Link>}
+          </div>
         </div>
         <div className="store-hero__visual"><span>NEW</span><strong>Điện thoại<br />chính hãng.</strong><p>Chọn đúng cấu hình, biết rõ giá và tồn kho.</p></div>
       </section>

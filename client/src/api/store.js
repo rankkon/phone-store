@@ -26,6 +26,12 @@ export const reviewApi = {
   update: (reviewId, payload) => api.patch(`/reviews/${reviewId}`, payload),
 };
 
+export const favoriteApi = {
+  list: () => api.get('/favorites'),
+  add: (productId) => api.post('/favorites', { productId }),
+  remove: (productId) => api.delete(`/favorites/${productId}`),
+};
+
 export const orderApi = {
   create: (payload) => api.post('/orders', payload),
   listMine: (params) => api.get('/orders/my-orders', { params }),
@@ -33,5 +39,11 @@ export const orderApi = {
   cancelRequest: (id) => api.post(`/orders/${id}/cancel-request`),
   createVnpayOrder: (payload) => api.post('/payments/vnpay/create', payload),
   retryVnpayOrder: (orderCode) => api.post(`/payments/vnpay/orders/${orderCode}/retry`),
+};
+
+export const returnApi = {
+  listMine: (params) => api.get('/returns/my-returns', { params }),
+  getForOrder: (orderId) => api.get(`/returns/orders/${orderId}`),
+  create: (orderId, payload) => api.post(`/returns/orders/${orderId}`, payload),
 };
 

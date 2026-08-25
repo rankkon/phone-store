@@ -5,9 +5,12 @@ import { productApi } from '../../api/admin';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import LoadingScreen from '../../components/LoadingScreen';
+import { isValidPersonName, isValidPhone, onlyDigits, onlyPersonName } from '../../utils/input';
 import { currency, orderStatusLabels } from '../../utils/order';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export default function AdminOrdersPage() {
+  const { notify } = useFeedback();
   const [searchParams] = useSearchParams();
   const initialSearch = searchParams.get('search') || '';
 
@@ -90,6 +93,22 @@ export default function AdminOrdersPage() {
       setPosError('Vui lòng chọn ít nhất một sản phẩm hợp lệ.');
       return;
     }
+    if (posCustomerName.trim() && !isValidPersonName(posCustomerName)) {
+      setPosError('Tên khách hàng chỉ gồm chữ cái, dài từ 2 đến 100 ký tự.');
+      return;
+    }
+    if (!isValidPhone(posPhone)) {
+      setPosError('Số điện thoại chỉ gồm 9–15 chữ số.');
+      return;
+    }
+    if (posDeliveryMode === 'SHIPPING' && !isValidPersonName(posCustomerName)) {
+      setPosError('Vui lòng nhập họ tên người nhận hợp lệ cho đơn giao hàng.');
+      return;
+    }
+    if (posDeliveryMode === 'SHIPPING' && !isValidPhone(posPhone, { required: true })) {
+      setPosError('Vui lòng nhập số điện thoại người nhận gồm 9–15 chữ số.');
+      return;
+    }
 
     setPosSubmitting(true);
     setPosError('');
@@ -117,15 +136,14 @@ export default function AdminOrdersPage() {
     })
       .then((res) => {
         setActionSuccess(`Tạo đơn hàng tại quầy ${res.data.data.orderCode} thành công.`);
+        notify(`Đã tạo đơn ${res.data.data.orderCode} thành công.`);
         setShowPosModal(false);
         fetchOrders();
-        if (window.confirm(`Tạo đơn ${res.data.data.orderCode} thành công. Bạn có muốn xem chi tiết và in hóa đơn ngay bây giờ?`)) {
-          window.open(`/admin/orders/${res.data.data._id}`, '_blank');
-        }
         setPosSubmitting(false);
       })
       .catch((err) => {
         setPosError(getApiError(err));
+        notify(getApiError(err), { type: 'error' });
         setPosSubmitting(false);
       });
   };
@@ -558,18 +576,20 @@ export default function AdminOrdersPage() {
                       value={posCustomerName}
                       onChange={(e) => {
                         setPosUserId('');
-                        setPosCustomerName(e.target.value);
+                        setPosCustomerName(onlyPersonName(e.target.value));
                       }}
                       style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                     />
                     <input
                       ref={phoneInputRef}
-                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{9,15}"
+                      maxLength="15"
                       placeholder="Số điện thoại"
                       value={posPhone}
                       onChange={(e) => {
                         setPosUserId('');
-                        setPosPhone(e.target.value);
+                        setPosPhone(onlyDigits(e.target.value));
                       }}
                       style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
                     />
@@ -771,6 +791,7 @@ export default function AdminOrdersPage() {
                         <input
                           type="number"
                           min="1"
+                          max="99"
                           value={item.quantity}
                           onChange={(e) => {
                             const newItems = [...posItems];

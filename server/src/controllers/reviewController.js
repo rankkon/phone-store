@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import ProductReview from '../models/ProductReview.js';
+import Order from '../models/Order.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { validateFreeText } from '../utils/inputValidation.js';
 
 function parseRating(value) {
   if (value === undefined) return undefined;
@@ -15,11 +17,15 @@ function parseRating(value) {
 
 function getReviewInput(body) {
   const rating = parseRating(body.rating);
-  const comment = body.comment?.trim();
+  const comment = validateFreeText(body.comment, 'Nhận xét', { required: true, minLength: 3, maxLength: 1000 });
   if (!rating || !comment) {
     throw new ApiError(400, 'Vui lòng chọn số sao và nhập nhận xét.');
   }
   return { rating, comment };
+}
+
+async function hasCompletedPurchase(userId, productId) {
+  return Boolean(await Order.exists({ userId, status: 'COMPLETED', 'items.productId': productId }));
 }
 
 export const getProductReviews = asyncHandler(async (req, res) => {
@@ -28,13 +34,13 @@ export const getProductReviews = asyncHandler(async (req, res) => {
   const rating = parseRating(req.query.rating);
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(30, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
-  const filter = { productId: req.query.productId, ...(rating ? { rating } : {}) };
+  const filter = { productId: req.query.productId, isVisible: { $ne: false }, ...(rating ? { rating } : {}) };
 
   const [reviews, total, groupedRatings] = await Promise.all([
     ProductReview.find(filter).populate('userId', 'fullName').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
     ProductReview.countDocuments(filter),
     ProductReview.aggregate([
-      { $match: { productId: new mongoose.Types.ObjectId(req.query.productId) } },
+      { $match: { productId: new mongoose.Types.ObjectId(req.query.productId), isVisible: { $ne: false } } },
       { $group: { _id: '$rating', count: { $sum: 1 }, average: { $avg: '$rating' } } },
     ]),
   ]);
@@ -49,6 +55,7 @@ export const getProductReviews = asyncHandler(async (req, res) => {
       comment: review.comment,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
+      adminReply: review.adminReply ? { content: review.adminReply.content, repliedAt: review.adminReply.repliedAt } : null,
       user: review.userId ? { _id: review.userId._id, fullName: review.userId.fullName } : { fullName: 'Khách hàng' },
     })),
     summary: {
@@ -68,6 +75,9 @@ export const createReview = asyncHandler(async (req, res) => {
   }
   const product = await Product.findOne({ _id: productId, isActive: true });
   if (!product) throw new ApiError(404, 'Không tìm thấy sản phẩm để đánh giá.');
+  if (!(await hasCompletedPurchase(req.user._id, productId))) {
+    throw new ApiError(403, 'Bạn chỉ có thể đánh giá sản phẩm sau khi đơn hàng đã hoàn thành.');
+  }
 
   const existingReview = await ProductReview.findOne({ productId, userId: req.user._id });
   if (existingReview) {
@@ -92,8 +102,11 @@ export const getMyProductReview = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'productId không hợp lệ.');
   }
 
-  const review = await ProductReview.findOne({ productId, userId: req.user._id });
-  res.json({ data: review });
+  const [review, canReview] = await Promise.all([
+    ProductReview.findOne({ productId, userId: req.user._id }),
+    hasCompletedPurchase(req.user._id, productId),
+  ]);
+  res.json({ data: review, meta: { canReview } });
 });
 
 export const updateMyReview = asyncHandler(async (req, res) => {
@@ -103,6 +116,9 @@ export const updateMyReview = asyncHandler(async (req, res) => {
   const { rating, comment } = getReviewInput(req.body);
   const review = await ProductReview.findOne({ _id: req.params.reviewId, userId: req.user._id });
   if (!review) throw new ApiError(404, 'Không tìm thấy đánh giá của bạn.');
+  if (!(await hasCompletedPurchase(req.user._id, review.productId))) {
+    throw new ApiError(403, 'Bạn chỉ có thể chỉnh sửa đánh giá của sản phẩm đã mua.');
+  }
 
   review.rating = rating;
   review.comment = comment;

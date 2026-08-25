@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, trim: true, default: '', maxlength: 20 },
   address: { type: addressSchema, default: () => ({}) },
   avatarUrl: { type: String, trim: true, default: '' },
+  avatarPublicId: { type: String, trim: true, default: '' },
   role: { type: String, enum: ['CUSTOMER', 'STAFF', 'ADMIN'], default: 'CUSTOMER' },
   status: { type: String, enum: ['ACTIVE', 'BLOCKED'], default: 'ACTIVE' },
   blockReason: { type: String, default: '' },
