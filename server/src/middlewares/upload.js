@@ -25,3 +25,4 @@ function imageUpload({ fileSize, files = 1 }) {
 
 export const productImageUpload = imageUpload({ fileSize: 5 * 1024 * 1024, files: 5 });
 export const avatarImageUpload = imageUpload({ fileSize: 2 * 1024 * 1024 });
+export const brandLogoUpload = imageUpload({ fileSize: 2 * 1024 * 1024 });

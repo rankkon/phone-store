@@ -3,14 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../../api/auth';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
-import { useAuth } from '../../context/AuthContext';
 import { isValidPersonName, isValidPhone, onlyDigits, onlyPersonName } from '../../utils/input';
+import { savePendingEmailVerification } from '../../utils/pendingEmailVerification';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(event) {
@@ -23,8 +22,8 @@ export default function RegisterPage() {
       const payload = { ...form };
       delete payload.confirmPassword;
       const response = await authApi.register(payload);
-      login(response.data.data);
-      navigate('/products', { replace: true });
+      savePendingEmailVerification(response.data.data);
+      navigate('/verify-email', { replace: true });
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally { setSubmitting(false); }

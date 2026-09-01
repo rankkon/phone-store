@@ -34,6 +34,13 @@ function createAccessToken(user) {
   });
 }
 
+function createEmailVerificationToken(user) {
+  return jwt.sign({ sub: user._id.toString(), tokenType: 'email_verification' }, process.env.JWT_SECRET, {
+    expiresIn: '15m',
+    jwtid: crypto.randomUUID(),
+  });
+}
+
 function getRefreshSecret() {
   return process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 }
@@ -175,6 +182,9 @@ async function consumeEmailCode(user, purpose, code) {
 }
 
 async function sendAuthResponse(res, user, statusCode = 200, message = 'Thao tác thành công.') {
+  if (!user.isEmailVerified) {
+    throw new ApiError(403, 'Vui lòng xác minh email trước khi đăng nhập.');
+  }
   const refreshToken = createRefreshToken(user);
   user.refreshTokenHash = hashToken(refreshToken);
   user.refreshTokenExpiresAt = new Date(Date.now() + getRefreshLifetimeMs());
@@ -233,7 +243,16 @@ export const register = asyncHandler(async (req, res) => {
     }
     throw error;
   }
-  await sendAuthResponse(res, user, 201, 'Đăng ký thành công. Mã xác minh 6 số đã được gửi đến email của bạn.');
+  user.refreshTokenHash = '';
+  user.refreshTokenExpiresAt = null;
+  await user.save({ validateBeforeSave: false });
+  res.status(201).json({
+    message: 'Đăng ký thành công. Mã xác minh 6 số đã được gửi đến email của bạn.',
+    data: {
+      email: user.email,
+      verificationToken: createEmailVerificationToken(user),
+    },
+  });
 });
 
 export const login = asyncHandler(async (req, res) => {
@@ -244,6 +263,16 @@ export const login = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
   if (!user || !(await user.comparePassword(password))) throw new ApiError(401, 'Email hoặc mật khẩu không chính xác.');
   if (user.status === 'BLOCKED') throw new ApiError(403, 'Tài khoản của bạn đã bị khóa.');
+  if (!user.isEmailVerified) {
+    return res.status(403).json({
+      message: 'Email của bạn chưa được xác minh. Vui lòng nhập mã đã gửi đến email để hoàn tất đăng ký.',
+      code: 'EMAIL_NOT_VERIFIED',
+      data: {
+        email: user.email,
+        verificationToken: createEmailVerificationToken(user),
+      },
+    });
+  }
 
   await sendAuthResponse(res, user);
 });
@@ -285,6 +314,10 @@ export const refreshToken = asyncHandler(async (req, res) => {
     || !user.refreshTokenExpiresAt || user.refreshTokenExpiresAt <= new Date()) {
     clearRefreshCookie(res);
     throw new ApiError(401, 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.');
+  }
+  if (!user.isEmailVerified) {
+    clearRefreshCookie(res);
+    throw new ApiError(403, 'Vui lòng xác minh email trước khi đăng nhập.');
   }
   await sendAuthResponse(res, user);
 });
@@ -352,6 +385,27 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   req.user.emailVerifiedAt = new Date();
   await req.user.save();
   res.json({ message: 'Xác minh email thành công.', data: req.user });
+});
+
+export const verifyRegistration = asyncHandler(async (req, res) => {
+  if (req.user.isEmailVerified) {
+    throw new ApiError(409, 'Email này đã được xác minh. Hãy đăng nhập để tiếp tục.');
+  }
+
+  await consumeEmailCode(req.user, 'EMAIL_VERIFICATION', req.body.code);
+  req.user.isEmailVerified = true;
+  req.user.emailVerifiedAt = new Date();
+  await req.user.save();
+  await sendAuthResponse(res, req.user, 200, 'Xác minh email thành công. Bạn đã được đăng nhập.');
+});
+
+export const resendRegistrationVerificationCode = asyncHandler(async (req, res) => {
+  if (req.user.isEmailVerified) {
+    return res.json({ message: 'Email này đã được xác minh. Hãy đăng nhập để tiếp tục.' });
+  }
+
+  await sendEmailCode(req.user, 'EMAIL_VERIFICATION');
+  return res.json({ message: 'Mã xác minh 6 số đã được gửi lại đến email của bạn.' });
 });
 
 export const sendPasswordChangeCode = asyncHandler(async (req, res) => {

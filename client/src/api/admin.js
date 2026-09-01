@@ -5,6 +5,11 @@ export const brandApi = {
   create: (payload) => api.post('/admin/brands', payload),
   update: (id, payload) => api.patch(`/admin/brands/${id}`, payload),
   setStatus: (id, isActive) => api.patch(`/admin/brands/${id}/status`, { isActive }),
+  uploadLogo: (id, file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return api.post(`/admin/brands/${id}/logo`, formData);
+  },
 };
 
 export const productApi = {
@@ -16,7 +21,7 @@ export const productApi = {
   uploadImages: (id, files) => {
     const formData = new FormData();
     [...files].forEach((file) => formData.append('images', file));
-    return api.post(`/admin/products/${id}/images`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(`/admin/products/${id}/images`, formData);
   },
   deleteImage: (id, imageId) => api.delete(`/admin/products/${id}/images/${imageId}`),
 };

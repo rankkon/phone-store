@@ -12,7 +12,7 @@ const emptyAddress = { recipientName: '', phone: '', province: '', district: '',
 
 function formatAddress(address) {
   const values = [address?.detail, address?.ward, address?.district, address?.province].filter(Boolean);
-  return values.length ? values.join(', ') : 'Chưa thiết lập địa chỉ mặc định';
+  return values.length ? values.join(', ') : 'Chưa thiết lập địa chỉ';
 }
 
 export default function ProfilePage() {
@@ -75,7 +75,7 @@ export default function ProfilePage() {
     if (!isValidPersonName(form.fullName)) { setError('Họ và tên chỉ gồm chữ cái, dài từ 2 đến 100 ký tự.'); return; }
     if (!isValidPhone(form.phone)) { setError('Số điện thoại chỉ gồm 9–15 chữ số.'); return; }
     const addressValues = Object.values(form.address).map((value) => String(value || '').trim());
-    if (addressValues.some(Boolean) && addressValues.some((value) => !value)) { setError('Vui lòng nhập đủ các trường của địa chỉ mặc định hoặc để trống toàn bộ.'); return; }
+    if (addressValues.some(Boolean) && addressValues.some((value) => !value)) { setError('Vui lòng nhập đủ các trường địa chỉ hoặc để trống toàn bộ.'); return; }
     if (form.address.recipientName && !isValidPersonName(form.address.recipientName)) { setError('Tên người nhận chỉ gồm chữ cái, dài từ 2 đến 100 ký tự.'); return; }
     if (!isValidPhone(form.address.phone)) { setError('Số điện thoại người nhận chỉ gồm 9–15 chữ số.'); return; }
     setSaving(true);
@@ -140,7 +140,7 @@ export default function ProfilePage() {
           <div><dt>Họ và tên</dt><dd>{user.fullName || 'Chưa cập nhật'}</dd></div>
           <div><dt>Email</dt><dd>{user.email}</dd></div>
           <div><dt>Số điện thoại</dt><dd>{user.phone || 'Chưa cập nhật'}</dd></div>
-          <div><dt>Địa chỉ mặc định</dt><dd>{formatAddress(user.address)}</dd></div>
+          <div><dt>Địa chỉ</dt><dd>{formatAddress(user.address)}</dd></div>
         </dl>
         <div className="profile-actions"><button type="button" className="button" onClick={() => openEditor('profile')}>Sửa thông tin</button><button type="button" className="button button--ghost" onClick={() => openEditor('password')}>Đổi mật khẩu</button></div>
       </section>
@@ -153,7 +153,7 @@ export default function ProfilePage() {
           <label>Họ và tên<input value={form.fullName} onChange={(event) => setForm({ ...form, fullName: onlyPersonName(event.target.value) })} minLength="2" maxLength="100" required /></label>
           <label>Số điện thoại<input inputMode="numeric" pattern="[0-9]{9,15}" maxLength="15" value={form.phone} onChange={(event) => setForm({ ...form, phone: onlyDigits(event.target.value) })} /></label>
         </div>
-        <div className="profile-editor__section"><h3>Địa chỉ mặc định</h3><p>Nhập toàn bộ các trường nếu bạn muốn lưu địa chỉ giao hàng mặc định.</p></div>
+        <div className="profile-editor__section"><h3>Địa chỉ</h3></div>
         <div className="two-columns">
           <label>Người nhận<input value={form.address.recipientName} onChange={(event) => setForm({ ...form, address: { ...form.address, recipientName: onlyPersonName(event.target.value) } })} minLength="2" maxLength="100" /></label>
           <label>SĐT người nhận<input inputMode="numeric" pattern="[0-9]{9,15}" maxLength="15" value={form.address.phone} onChange={(event) => setForm({ ...form, address: { ...form.address, phone: onlyDigits(event.target.value) } })} /></label>

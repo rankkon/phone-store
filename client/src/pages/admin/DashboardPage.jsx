@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '../../api/admin';
 import { getApiError } from '../../api/http';
@@ -22,7 +22,7 @@ function getNiceMax(value) {
   return Math.ceil(value / magnitude / 5) * 5 * magnitude;
 }
 
-function FinancialLineChart({ data, enabledLines, onHover }) {
+function FinancialLineChart({ data, enabledLines }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const width = 960;
   const height = 408;
@@ -42,8 +42,6 @@ function FinancialLineChart({ data, enabledLines, onHover }) {
   const yFor = (value) => padding.top + ((maxValue - value) / valueRange) * plotHeight;
   const hoveredPoint = hoveredIndex === null ? null : points[hoveredIndex];
   const activeY = hoveredPoint ? Math.min(...selectedKeys.map((key) => yFor(hoveredPoint[key]))) : 0;
-
-  useEffect(() => { onHover(hoveredPoint || null); }, [hoveredIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (data.length === 0) return <div className="financial-chart__empty">Không có đơn hàng hoàn thành trong khoảng thời gian đã chọn.</div>;
 
@@ -72,7 +70,7 @@ function FinancialLineChart({ data, enabledLines, onHover }) {
         <defs>
           {selectedKeys.map((key) => <linearGradient key={key} id={`${key}Gradient`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={lineConfig[key].color} stopOpacity="0.17" /><stop offset="100%" stopColor={lineConfig[key].color} stopOpacity="0" /></linearGradient>)}
         </defs>
-        {selectedKeys.flatMap((key) => points.map((point, index) => <g key={`${key}-${point.key}`} className="financial-chart__node" onMouseEnter={() => setHoveredIndex(index)} onFocus={() => setHoveredIndex(index)} tabIndex="0"><circle cx={point.x} cy={yFor(point[key])} r="10" fill={lineConfig[key].color} fillOpacity="0.18" /><circle cx={point.x} cy={yFor(point[key])} r="6.5" fill={lineConfig[key].color} stroke="#fff" strokeWidth="3" /></g>))}
+        {selectedKeys.flatMap((key) => points.map((point, index) => <g key={`${key}-${point.key}`} className="financial-chart__node" onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(null)} onFocus={() => setHoveredIndex(index)} onBlur={() => setHoveredIndex(null)} tabIndex="0"><circle cx={point.x} cy={yFor(point[key])} r="10" fill={lineConfig[key].color} fillOpacity="0.18" /><circle cx={point.x} cy={yFor(point[key])} r="6.5" fill={lineConfig[key].color} stroke="#fff" strokeWidth="3" /></g>))}
         {points.map((point) => <g key={`label-${point.key}`}><text x={point.x} y={height - 38} textAnchor="middle" className="financial-chart__label">{point.label}</text><text x={point.x} y={height - 17} textAnchor="middle" className="financial-chart__count">{point.orderCount} đơn</text></g>)}
       </svg>
     </div>
@@ -91,10 +89,12 @@ export default function DashboardPage() {
   const [enabledLines, setEnabledLines] = useState({ revenue: true, profit: true });
   const [loading, setLoading] = useState(true);
   const [loadingChart, setLoadingChart] = useState(false);
-  const [hoveredPoint, setHoveredPoint] = useState(null);
   const [error, setError] = useState('');
+  const chartRequestRef = useRef(0);
 
   async function loadChart(nextBy = by, nextStart = startDate, nextEnd = endDate, nextSource = source) {
+    const requestId = chartRequestRef.current + 1;
+    chartRequestRef.current = requestId;
     setLoadingChart(true);
     try {
       const response = await dashboardApi.getRevenue({ 
@@ -103,11 +103,14 @@ export default function DashboardPage() {
         endDate: nextEnd || undefined,
         source: nextSource || undefined
       });
+      if (requestId !== chartRequestRef.current) return;
       setFinancialData(response.data.data);
+      setError('');
     } catch (requestError) {
+      if (requestId !== chartRequestRef.current) return;
       setError(getApiError(requestError));
     } finally {
-      setLoadingChart(false);
+      if (requestId === chartRequestRef.current) setLoadingChart(false);
     }
   }
 
@@ -128,11 +131,6 @@ export default function DashboardPage() {
     setEnabledLines((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  function submitFilter(event) {
-    event.preventDefault();
-    loadChart(by, startDate, endDate, source);
-  }
-
   function changePeriod(nextBy) {
     setBy(nextBy);
     setStartDate('');
@@ -140,7 +138,21 @@ export default function DashboardPage() {
     loadChart(nextBy, '', '', source);
   }
 
-  const selectedLineKeys = Object.keys(enabledLines).filter((key) => enabledLines[key]);
+  function changeSource(nextSource) {
+    setSource(nextSource);
+    loadChart(by, startDate, endDate, nextSource);
+  }
+
+  function changeStartDate(nextStartDate) {
+    setStartDate(nextStartDate);
+    loadChart(by, nextStartDate, endDate, source);
+  }
+
+  function changeEndDate(nextEndDate) {
+    setEndDate(nextEndDate);
+    loadChart(by, startDate, nextEndDate, source);
+  }
+
   const primaryKey = enabledLines.revenue ? 'revenue' : 'profit';
   const totalPrimary = financialData.reduce((total, item) => total + item[primaryKey], 0);
   const totalOrders = financialData.reduce((total, item) => total + item.orderCount, 0);
@@ -170,9 +182,9 @@ export default function DashboardPage() {
         <article><span>Khách hàng</span><strong>{overview.totalUsers.toLocaleString('vi-VN')}</strong></article>
       </div>
 
-      {/* Tỷ trọng kênh bán hàng (POS vs Online) */}
+      {/* Tỷ trọng kênh bán hàng */}
       <div className="panel" style={{ background: '#fff', padding: '1.25rem', borderRadius: '8px', border: '1px solid #eee', marginBottom: '1.5rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#5f6368', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tỷ trọng kênh bán hàng (Doanh thu thực tế)</h3>
+        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#5f6368', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tỷ trọng kênh bán hàng</h3>
         {overview.totalRevenue > 0 ? (
           <>
             <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', background: '#e0e0e0', marginBottom: '0.75rem' }}>
@@ -198,20 +210,18 @@ export default function DashboardPage() {
       <section className="financial-dashboard panel">
         <div className="financial-dashboard__topline">
           <div><p className="eyebrow">BIỂU ĐỒ TÀI CHÍNH</p><h2>{compactCurrency(totalPrimary)}</h2><p>{totalOrders} đơn hoàn thành trong khoảng {rangeLabel}</p></div>
-          <form className="financial-dashboard__filters" onSubmit={submitFilter} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>
-              Nguồn đơn
-              <select value={source} onChange={(event) => { setSource(event.target.value); loadChart(by, startDate, endDate, event.target.value); }} style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #ddd' }}>
+          <div className="financial-dashboard__filters" aria-label="Bộ lọc biểu đồ tài chính">
+            <label><span>Nguồn đơn</span>
+              <select value={source} onChange={(event) => changeSource(event.target.value)}>
                 <option value="">Tất cả</option>
                 <option value="online">Đơn Online</option>
                 <option value="offline">Tại quầy (POS)</option>
               </select>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Nhóm theo<select value={by} onChange={(event) => changePeriod(event.target.value)} style={{ padding: '0.35rem', borderRadius: '4px', border: '1px solid #ddd' }}><option value="day">Theo ngày</option><option value="month">Theo tháng</option><option value="year">Theo năm</option></select></label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Từ ngày<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #ddd' }} /></label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold' }}>Đến ngày<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #ddd' }} /></label>
-            <button className="button button--secondary" type="submit" disabled={loadingChart} style={{ padding: '0.4rem 1rem' }}>{loadingChart ? 'Đang tải...' : 'Áp dụng'}</button>
-          </form>
+            <label><span>Nhóm theo</span><select value={by} onChange={(event) => changePeriod(event.target.value)}><option value="day">Theo ngày</option><option value="month">Theo tháng</option><option value="year">Theo năm</option></select></label>
+            <label><span>Từ ngày</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => changeStartDate(event.target.value)} /></label>
+            <label><span>Đến ngày</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => changeEndDate(event.target.value)} /></label>
+          </div>
         </div>
 
         <div className="financial-dashboard__summary">
@@ -220,8 +230,7 @@ export default function DashboardPage() {
           <article><span>CAO NHẤT</span><strong>{peak ? compactCurrency(peak[primaryKey]) : '0 đ'}</strong><small>{peak?.fullLabel || 'Chưa có dữ liệu'}</small></article>
           <div className="financial-line-controls"><span>LINE HIỂN THỊ</span>{Object.keys(lineConfig).map((key) => <button type="button" key={key} className={`financial-line-toggle ${lineConfig[key].className} ${enabledLines[key] ? 'financial-line-toggle--selected' : ''}`} onClick={() => toggleLine(key)} aria-pressed={enabledLines[key]}><input type="checkbox" checked={enabledLines[key]} readOnly /><i /><b>{lineConfig[key].label}</b><small>{compactCurrency(financialData.reduce((total, item) => total + item[key], 0))}</small></button>)}</div>
         </div>
-        {loadingChart ? <div className="financial-chart__loading">Đang tải dữ liệu biểu đồ...</div> : <FinancialLineChart data={financialData} enabledLines={enabledLines} onHover={setHoveredPoint} />}
-        <p className="financial-dashboard__footnote">{hoveredPoint ? `Đang xem: ${hoveredPoint.fullLabel}` : `Hiển thị ${selectedLineKeys.map((key) => lineConfig[key].label.toLowerCase()).join(' và ')}. Lợi nhuận = doanh thu thực nhận − giá nhập của sản phẩm trong đơn.`}</p>
+        {loadingChart ? <div className="financial-chart__loading">Đang tải dữ liệu biểu đồ...</div> : <FinancialLineChart data={financialData} enabledLines={enabledLines} />}
 
         {/* Bảng đối soát chi tiết */}
         <div style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>

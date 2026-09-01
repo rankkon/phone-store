@@ -1,12 +1,14 @@
 import { Router } from 'express';
-import { changePassword, deleteAvatar, forgotPassword, getMe, login, logout, refreshToken, register, resetPassword, sendEmailVerificationCode, sendPasswordChangeCode, updateProfile, uploadAvatar, verifyEmail } from '../controllers/authController.js';
-import { requireAuth } from '../middlewares/auth.js';
+import { changePassword, deleteAvatar, forgotPassword, getMe, login, logout, refreshToken, register, resendRegistrationVerificationCode, resetPassword, sendEmailVerificationCode, sendPasswordChangeCode, updateProfile, uploadAvatar, verifyEmail, verifyRegistration } from '../controllers/authController.js';
+import { requireAuth, requireEmailVerificationToken } from '../middlewares/auth.js';
 import { authRateLimiter, emailCodeRateLimiter } from '../middlewares/rateLimit.js';
 import { avatarImageUpload } from '../middlewares/upload.js';
 
 const router = Router();
 router.post('/register', authRateLimiter, register);
 router.post('/login', authRateLimiter, login);
+router.post('/verify-registration', emailCodeRateLimiter, requireEmailVerificationToken, verifyRegistration);
+router.post('/resend-registration-verification-code', emailCodeRateLimiter, requireEmailVerificationToken, resendRegistrationVerificationCode);
 router.post('/logout', logout);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', authRateLimiter, forgotPassword);

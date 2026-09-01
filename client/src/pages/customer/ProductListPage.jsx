@@ -6,12 +6,14 @@ import LoadingScreen from '../../components/LoadingScreen';
 import FlashMessage from '../../components/FlashMessage';
 
 const initialFilters = { search: '', brand: '', ram: '', storage: '', color: '', minPrice: '', maxPrice: '', inStock: false, sort: 'newest', page: 1, limit: 12 };
-const pricePresets = [
-  { label: 'Dưới 5 triệu', minPrice: '', maxPrice: '5000000' },
-  { label: '5 – 10 triệu', minPrice: '5000000', maxPrice: '10000000' },
-  { label: '10 – 20 triệu', minPrice: '10000000', maxPrice: '20000000' },
-  { label: 'Từ 20 triệu', minPrice: '20000000', maxPrice: '' },
-];
+const PRICE_RANGE_MIN = 0;
+const PRICE_RANGE_MAX = 100_000_000;
+const PRICE_RANGE_STEP = 100_000;
+const priceFormatter = new Intl.NumberFormat('vi-VN');
+
+function formatPrice(value) {
+  return `${priceFormatter.format(value)} đ`;
+}
 
 function filterKey({ search, brand, ram, storage, color, minPrice, maxPrice, inStock, sort }) {
   return JSON.stringify({ search, brand, ram, storage, color, minPrice, maxPrice, inStock, sort });
@@ -31,7 +33,10 @@ export default function ProductListPage() {
   const draftFilterKey = useMemo(() => filterKey(draft), [draft]);
   const appliedFilterKey = useMemo(() => filterKey(filters), [filters]);
   const isFilterPending = draftFilterKey !== appliedFilterKey;
-  const invalidPriceRange = draft.minPrice !== '' && draft.maxPrice !== '' && Number(draft.minPrice) > Number(draft.maxPrice);
+  const selectedMinPrice = Number(draft.minPrice || PRICE_RANGE_MIN);
+  const selectedMaxPrice = Number(draft.maxPrice || PRICE_RANGE_MAX);
+  const priceRangeStart = ((selectedMinPrice - PRICE_RANGE_MIN) / (PRICE_RANGE_MAX - PRICE_RANGE_MIN)) * 100;
+  const priceRangeWidth = ((selectedMaxPrice - selectedMinPrice) / (PRICE_RANGE_MAX - PRICE_RANGE_MIN)) * 100;
 
   useEffect(() => {
     let active = true;
@@ -54,16 +59,12 @@ export default function ProductListPage() {
 
   useEffect(() => {
     if (!isFilterPending) return undefined;
-    if (invalidPriceRange) {
-      setError('Giá từ phải nhỏ hơn hoặc bằng giá đến.');
-      return undefined;
-    }
     const timeoutId = window.setTimeout(() => {
       setError('');
       setFilters({ ...draft, page: 1 });
     }, 700);
     return () => window.clearTimeout(timeoutId);
-  }, [draft, invalidPriceRange, isFilterPending]);
+  }, [draft, isFilterPending]);
 
   function updateDraft(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -74,8 +75,19 @@ export default function ProductListPage() {
     setFilters(initialFilters);
   }
 
-  function applyPricePreset(preset) {
-    setDraft((current) => ({ ...current, minPrice: preset.minPrice, maxPrice: preset.maxPrice }));
+  function updatePriceRange(boundary, rawValue) {
+    const nextValue = Number(rawValue);
+    setDraft((current) => {
+      const currentMin = Number(current.minPrice || PRICE_RANGE_MIN);
+      const currentMax = Number(current.maxPrice || PRICE_RANGE_MAX);
+      const minPrice = boundary === 'min' ? Math.min(nextValue, currentMax) : currentMin;
+      const maxPrice = boundary === 'max' ? Math.max(nextValue, currentMin) : currentMax;
+      return {
+        ...current,
+        minPrice: minPrice === PRICE_RANGE_MIN ? '' : String(minPrice),
+        maxPrice: maxPrice === PRICE_RANGE_MAX ? '' : String(maxPrice),
+      };
+    });
   }
 
   function changePage(page) {
@@ -105,7 +117,7 @@ export default function ProductListPage() {
           <label className="catalog-filter-field"><span>RAM</span><select value={draft.ram} onChange={(event) => updateDraft('ram', event.target.value)}><option value="">Tất cả RAM</option>{ramOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label className="catalog-filter-field"><span>Bộ nhớ trong</span><select value={draft.storage} onChange={(event) => updateDraft('storage', event.target.value)}><option value="">Tất cả bộ nhớ</option>{storageOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label className="catalog-filter-field"><span>Màu sắc</span><select value={draft.color} onChange={(event) => updateDraft('color', event.target.value)}><option value="">Tất cả màu sắc</option>{colorOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <div className="catalog-price-filter"><span>Khoảng giá (VND)</span><div className="catalog-price-filter__inputs"><label>Từ<input type="number" inputMode="numeric" min="0" step="100000" placeholder="0" value={draft.minPrice} onChange={(event) => updateDraft('minPrice', event.target.value)} /></label><label>Đến<input type="number" inputMode="numeric" min="0" step="100000" placeholder="Không giới hạn" value={draft.maxPrice} onChange={(event) => updateDraft('maxPrice', event.target.value)} /></label></div><div className="catalog-price-presets">{pricePresets.map((preset) => <button type="button" key={preset.label} className={draft.minPrice === preset.minPrice && draft.maxPrice === preset.maxPrice ? 'catalog-price-preset catalog-price-preset--active' : 'catalog-price-preset'} onClick={() => applyPricePreset(preset)} aria-pressed={draft.minPrice === preset.minPrice && draft.maxPrice === preset.maxPrice}>{preset.label}</button>)}</div>{invalidPriceRange && <small className="catalog-price-error">Khoảng giá chưa hợp lệ.</small>}</div>
+          <div className="catalog-price-filter"><span>Khoảng giá</span><div className="catalog-price-slider" style={{ '--range-start': `${priceRangeStart}%`, '--range-width': `${priceRangeWidth}%` }}><div className="catalog-price-slider__track" aria-hidden="true" /><input type="range" min={PRICE_RANGE_MIN} max={PRICE_RANGE_MAX} step={PRICE_RANGE_STEP} value={selectedMinPrice} onChange={(event) => updatePriceRange('min', event.target.value)} aria-label="Giá tối thiểu" aria-valuetext={formatPrice(selectedMinPrice)} /><input type="range" min={PRICE_RANGE_MIN} max={PRICE_RANGE_MAX} step={PRICE_RANGE_STEP} value={selectedMaxPrice} onChange={(event) => updatePriceRange('max', event.target.value)} aria-label="Giá tối đa" aria-valuetext={selectedMaxPrice === PRICE_RANGE_MAX ? 'Không giới hạn' : formatPrice(selectedMaxPrice)} /></div><div className="catalog-price-filter__values"><span>Từ <strong>{formatPrice(selectedMinPrice)}</strong></span><span>Đến <strong>{selectedMaxPrice === PRICE_RANGE_MAX ? 'Không giới hạn' : formatPrice(selectedMaxPrice)}</strong></span></div></div>
           <label className="checkbox-label catalog-stock-filter"><input type="checkbox" checked={draft.inStock} onChange={(event) => updateDraft('inStock', event.target.checked)} />Chỉ hiển thị sản phẩm còn hàng</label>
           <p className="catalog-filter-help" aria-live="polite">{isFilterPending ? <><span className="spinner" />Đang tìm kiếm...</> : 'Kết quả được cập nhật tự động.'}</p>
         </aside>

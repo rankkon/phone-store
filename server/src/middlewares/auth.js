@@ -22,6 +22,31 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   const user = await User.findById(payload.sub);
   if (!user) throw new ApiError(401, 'Tài khoản không còn tồn tại.');
   if (user.status === 'BLOCKED') throw new ApiError(403, 'Tài khoản của bạn đã bị khóa.');
+  if (!user.isEmailVerified) throw new ApiError(403, 'Vui lòng xác minh email trước khi đăng nhập.');
+
+  req.user = user;
+  next();
+});
+
+export const requireEmailVerificationToken = asyncHandler(async (req, res, next) => {
+  const authorization = req.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : null;
+
+  if (!token) throw new ApiError(401, 'Phiên xác minh email không hợp lệ hoặc đã hết hạn.');
+
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    throw new ApiError(401, 'Phiên xác minh email không hợp lệ hoặc đã hết hạn.');
+  }
+  if (payload.tokenType !== 'email_verification') {
+    throw new ApiError(401, 'Phiên xác minh email không hợp lệ hoặc đã hết hạn.');
+  }
+
+  const user = await User.findById(payload.sub);
+  if (!user) throw new ApiError(401, 'Tài khoản không còn tồn tại.');
+  if (user.status === 'BLOCKED') throw new ApiError(403, 'Tài khoản của bạn đã bị khóa.');
 
   req.user = user;
   next();

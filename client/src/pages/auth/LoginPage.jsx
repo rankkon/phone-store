@@ -4,6 +4,7 @@ import { authApi } from '../../api/auth';
 import { getApiError } from '../../api/http';
 import FlashMessage from '../../components/FlashMessage';
 import { useAuth } from '../../context/AuthContext';
+import { savePendingEmailVerification } from '../../utils/pendingEmailVerification';
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -23,6 +24,12 @@ export default function LoginPage() {
       const destination = location.state?.from || (response.data.data.user.role === 'ADMIN' ? '/admin/products' : response.data.data.user.role === 'CUSTOMER' ? '/products' : '/profile');
       navigate(destination, { replace: true });
     } catch (requestError) {
+      const responseData = requestError.response?.data;
+      if (responseData?.code === 'EMAIL_NOT_VERIFIED' && responseData.data?.verificationToken) {
+        savePendingEmailVerification(responseData.data);
+        navigate('/verify-email', { replace: true, state: { destination: location.state?.from } });
+        return;
+      }
       setError(getApiError(requestError));
     } finally { setSubmitting(false); }
   }

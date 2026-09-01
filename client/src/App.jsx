@@ -16,6 +16,7 @@ import InventoryPage from './pages/admin/InventoryPage';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import NotificationsPage from './pages/NotificationsPage';
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="login" element={<LoginPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
           <Route path="register" element={<RegisterPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
         <Route path="about" element={<AboutPage />} />
         <Route path="contact" element={<ContactPage />} />

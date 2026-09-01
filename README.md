@@ -85,6 +85,8 @@ BREVO_SENDER_NAME=Phone Store
 
 `BREVO_SENDER_EMAIL` phải là email Sender đã xác minh trong Brevo; đây là địa chỉ của dự án, không phải email khách hàng. Brevo Free cho phép gửi email giao dịch theo hạn mức của tài khoản. Nếu thiếu cấu hình Brevo, đăng ký và các thao tác cần mã email sẽ trả lỗi cấu hình thay vì chờ vô hạn. Tài khoản Customer mới chỉ được mua hàng sau khi đã xác minh email trong hồ sơ.
 
+Khi đăng ký, hệ thống chỉ tạo tài khoản và chuyển đến màn hình nhập OTP; chưa tạo phiên đăng nhập. Access token và refresh cookie chỉ được cấp sau khi mã xác minh hợp lệ.
+
 #### MongoDB local
 
 Giữ `MONGODB_URI` như ví dụ trên và đảm bảo dịch vụ MongoDB đã chạy trước khi chạy backend.

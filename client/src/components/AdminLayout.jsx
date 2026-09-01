@@ -7,7 +7,7 @@ export default function AdminLayout() {
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
-        <div className="admin-sidebar__identity"><UserAvatar user={user} size="lg" /><div><p>{user?.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 'NHÂN VIÊN'}</p><strong>{user?.fullName || user?.email}</strong><span>{user?.email}</span></div></div>
+        <div className="admin-sidebar__identity"><UserAvatar user={user} size="lg" /><div><p>{user?.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 'NHÂN VIÊN'}</p><strong>{user?.fullName || user?.email}</strong></div></div>
         <nav className="admin-sidebar__nav" aria-label="Điều hướng quản trị">
           {user?.role === 'ADMIN' && (
             <>
