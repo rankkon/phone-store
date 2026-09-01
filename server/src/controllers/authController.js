@@ -1,7 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 import EmailVerificationCode from '../models/EmailVerificationCode.js';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
@@ -15,6 +14,7 @@ import {
   validatePersonName,
   validatePhone,
 } from '../utils/inputValidation.js';
+import { ensureEmailDeliveryConfigured, sendTransactionalEmail } from '../services/emailService.js';
 
 const REFRESH_COOKIE = 'phone_store_refresh_token';
 const EMAIL_CODE_LIFETIME_MS = 10 * 60 * 1000;
@@ -83,23 +83,6 @@ function clearRefreshCookie(res) {
   });
 }
 
-function getMailer() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !SMTP_FROM) return null;
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: process.env.SMTP_SECURE === 'true' || Number(SMTP_PORT) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-  });
-}
-
-function ensureMailer() {
-  const mailer = getMailer();
-  if (!mailer) throw new ApiError(503, 'Chức năng gửi mã chưa được cấu hình dịch vụ email.');
-  return mailer;
-}
-
 function ensureVerifiedEmail(user) {
   if (!user.isEmailVerified) {
     throw new ApiError(403, 'Vui lòng xác minh email trong hồ sơ trước khi thực hiện thao tác này.');
@@ -132,7 +115,7 @@ async function sendEmailCode(user, purpose) {
     throw new ApiError(403, 'Tài khoản demo không hỗ trợ gửi mã qua email. Hãy dùng tài khoản đăng ký bằng email của bạn để kiểm tra chức năng này.');
   }
 
-  const mailer = ensureMailer();
+  ensureEmailDeliveryConfigured();
   const now = new Date();
   const existing = await EmailVerificationCode.findOne({ userId: user._id, purpose });
   if (existing && existing.sentAt > new Date(now.getTime() - EMAIL_CODE_COOLDOWN_MS)) {
@@ -156,16 +139,15 @@ async function sendEmailCode(user, purpose) {
 
   const content = emailCodeContent[purpose];
   try {
-    await mailer.sendMail({
-      from: process.env.SMTP_FROM,
+    await sendTransactionalEmail({
       to: user.email,
       subject: content.subject,
       text: `Mã ${content.action} của bạn là: ${code}. Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.`,
       html: `<p>Mã ${content.action} của bạn là:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p><p>Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.</p>`,
     });
-  } catch {
+  } catch (error) {
     await EmailVerificationCode.deleteOne({ _id: codeRecord._id });
-    throw new ApiError(502, 'Không thể gửi mã qua email. Vui lòng thử lại sau.');
+    throw error;
   }
 }
 
@@ -216,7 +198,7 @@ export const register = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Email đã được sử dụng.');
   }
 
-  ensureMailer();
+  ensureEmailDeliveryConfigured();
 
   let user = existingUser;
   const cleanPhone = phone?.trim();
@@ -395,7 +377,7 @@ export const changePassword = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const email = validateEmailInput(req.body.email);
-  ensureMailer();
+  ensureEmailDeliveryConfigured();
   const user = await User.findOne({ email });
   const genericMessage = 'Nếu email đã được xác minh và tồn tại, mã đặt lại mật khẩu đã được gửi.';
   if (!user || user.status === 'BLOCKED' || !user.isEmailVerified || demoEmails.has(user.email)) {

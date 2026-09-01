@@ -69,20 +69,21 @@ DEFAULT_SHIPPING_FEE=30000
 FREE_SHIPPING_THRESHOLD=15000000
 ```
 
-#### Xác minh email và mã bảo mật qua SMTP
+#### Xác minh email và mã bảo mật qua Brevo
 
-SMTP được dùng để gửi mã OTP 6 số khi đăng ký, xác minh email, đổi mật khẩu trong hồ sơ và quên mật khẩu. Mỗi mã có hiệu lực 10 phút, dùng một lần và bị giới hạn số lần nhập sai.
+Brevo được dùng để gửi mã OTP 6 số khi đăng ký, xác minh email, đổi mật khẩu trong hồ sơ và quên mật khẩu. Mỗi mã có hiệu lực 10 phút, dùng một lần và bị giới hạn số lần nhập sai. Dự án gọi Brevo qua HTTPS nên dùng được trên Render Free, nơi các cổng SMTP bị chặn.
+
+1. Tạo API key trong Brevo.
+2. Xác minh địa chỉ email người gửi trong Brevo, ví dụ một Gmail riêng dùng cho dự án.
+3. Điền các biến sau:
 
 ```env
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-smtp-username
-SMTP_PASSWORD=your-smtp-password
-SMTP_FROM=Phone Store <no-reply@example.com>
+BREVO_API_KEY=xkeysib_xxxxxxxxx
+BREVO_SENDER_EMAIL=your-verified-sender@gmail.com
+BREVO_SENDER_NAME=Phone Store
 ```
 
-Không có cấu hình SMTP, không thể đăng ký tài khoản mới hoặc thực hiện các thao tác cần mã email. Tài khoản Customer mới chỉ được mua hàng sau khi đã xác minh email trong hồ sơ.
+`BREVO_SENDER_EMAIL` phải là email Sender đã xác minh trong Brevo; đây là địa chỉ của dự án, không phải email khách hàng. Brevo Free cho phép gửi email giao dịch theo hạn mức của tài khoản. Nếu thiếu cấu hình Brevo, đăng ký và các thao tác cần mã email sẽ trả lỗi cấu hình thay vì chờ vô hạn. Tài khoản Customer mới chỉ được mua hàng sau khi đã xác minh email trong hồ sơ.
 
 #### MongoDB local
 
@@ -231,5 +232,5 @@ npm run build
 | Không kết nối được Atlas | Kiểm tra Network Access, username/password và URL-encoding mật khẩu. |
 | Upload ảnh báo Cloudinary chưa cấu hình | Điền đủ ba biến `CLOUDINARY_*` rồi khởi động lại backend. |
 | VNPay báo chưa cấu hình hoặc mã website không hợp lệ | Đăng ký Sandbox để nhận `VNP_TMNCODE` và `VNP_HASHSECRET` riêng, điền đủ bốn biến `VNP_*` trong `server/.env`, rồi khởi động lại backend. |
-| Đăng ký, xác minh hoặc quên mật khẩu báo chưa cấu hình email | Điền đủ các biến `SMTP_*` trong `server/.env`, sau đó khởi động lại backend. |
+| Đăng ký, xác minh hoặc quên mật khẩu báo chưa cấu hình email | Điền đủ `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`; email Sender này phải được xác minh trên Brevo. |
 | Frontend không gọi được API | Chạy backend, kiểm tra `VITE_API_URL` và `CLIENT_URL`, sau đó khởi động lại Vite. |

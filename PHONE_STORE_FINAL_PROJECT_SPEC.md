@@ -92,7 +92,7 @@ cors                  Cho phép frontend gọi backend
 dotenv                Đọc biến môi trường
 multer                Nhận file ảnh upload
 cloudinary            Upload và xóa ảnh trên Cloudinary
-nodemailer            Gửi mã xác minh và mã bảo mật qua email
+Brevo HTTPS API       Gửi mã xác minh và mã bảo mật qua email
 ```
 
 ## 2.3. Dịch vụ triển khai dự kiến
@@ -182,7 +182,7 @@ Chức năng bắt buộc:
 - Quên mật khẩu và đổi mật khẩu dùng OTP 6 số gửi qua email, có hiệu lực 10 phút.
 - Refresh token xoay vòng trong cookie `httpOnly`; access token vẫn gửi bằng header JWT.
 
-Chức năng chưa có: ảnh đại diện. Gửi email cần cấu hình `SMTP_*` ở backend.
+Đã có ảnh đại diện. Gửi email cần cấu hình `BREVO_API_KEY` và email Sender đã xác minh ở backend.
 
 ## 4.2. Danh sách sản phẩm
 
@@ -1224,10 +1224,9 @@ CLOUDINARY_API_SECRET=
 DEFAULT_SHIPPING_FEE=30000
 FREE_SHIPPING_THRESHOLD=15000000
 
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
+BREVO_API_KEY=
+BREVO_SENDER_EMAIL=
+BREVO_SENDER_NAME=Phone Store
 
 VNP_TMNCODE=
 VNP_HASHSECRET=
@@ -1235,7 +1234,7 @@ VNP_URL=
 VNP_RETURNURL=
 ```
 
-Các biến SMTP và VNPay chỉ cần điền nếu triển khai chức năng tương ứng.
+Các biến Brevo và VNPay chỉ cần điền nếu triển khai chức năng tương ứng.
 Không hard-code hoặc commit `JWT_SECRET`, `VNP_HASHSECRET` hay thông tin truy cập dịch vụ.
 
 ## Frontend `.env.example`
