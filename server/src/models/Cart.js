@@ -8,7 +8,14 @@ const cartItemSchema = new mongoose.Schema({
 
 const cartSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User', unique: true },
-  items: { type: [cartItemSchema], default: [] },
+  items: {
+    type: [cartItemSchema],
+    default: [],
+    validate: {
+      validator: (items) => items.length <= 50,
+      message: 'Giỏ hàng chỉ được chứa tối đa 50 sản phẩm khác nhau.',
+    },
+  },
 }, { timestamps: true });
 
 export default mongoose.model('Cart', cartSchema);

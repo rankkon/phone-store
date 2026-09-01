@@ -4,6 +4,8 @@ import Product from '../models/Product.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+const MAX_FAVORITES = 100;
+
 function serializeProduct(product) {
   if (!product) return null;
   const variants = product.variants
@@ -70,6 +72,11 @@ export const addFavorite = asyncHandler(async (req, res) => {
   const existing = await Favorite.findOne({ userId: req.user._id, productId });
   if (existing) {
     return res.json({ message: 'Sản phẩm đã có trong danh sách yêu thích.', data: { _id: existing._id, productId: existing.productId } });
+  }
+
+  const favoriteCount = await Favorite.countDocuments({ userId: req.user._id });
+  if (favoriteCount >= MAX_FAVORITES) {
+    throw new ApiError(400, `Danh sách yêu thích chỉ được chứa tối đa ${MAX_FAVORITES} sản phẩm.`);
   }
 
   try {

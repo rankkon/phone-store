@@ -8,6 +8,9 @@ import { cleanText, validateCode, validateFreeText } from '../utils/inputValidat
 import { recordInitialStock } from '../services/stockHistoryService.js';
 
 const specificationFields = ['chip', 'battery', 'screen', 'rearCamera', 'frontCamera', 'operatingSystem'];
+const MAX_PRODUCT_IMAGES = 10;
+const MAX_VARIANTS_PER_PRODUCT = 50;
+
 function parseVariant(rawVariant) {
   if (!rawVariant || typeof rawVariant !== 'object' || Array.isArray(rawVariant)) {
     throw new ApiError(400, 'Thông tin biến thể không hợp lệ.');
@@ -45,6 +48,9 @@ function parseVariant(rawVariant) {
 async function validateVariants(rawVariants, currentProductId) {
   if (!Array.isArray(rawVariants) || rawVariants.length === 0) {
     throw new ApiError(400, 'Sản phẩm phải có ít nhất một biến thể.');
+  }
+  if (rawVariants.length > MAX_VARIANTS_PER_PRODUCT) {
+    throw new ApiError(400, `Mỗi sản phẩm chỉ được có tối đa ${MAX_VARIANTS_PER_PRODUCT} biến thể.`);
   }
   const variants = rawVariants.map(parseVariant);
   const skuSet = new Set();
@@ -288,12 +294,15 @@ export const uploadProductImages = asyncHandler(async (req, res) => {
   if (!req.files?.length) throw new ApiError(400, 'Vui lòng chọn ít nhất một ảnh.');
   const product = await Product.findById(req.params.id);
   if (!product) throw new ApiError(404, 'Không tìm thấy sản phẩm.');
+  if (product.images.length + req.files.length > MAX_PRODUCT_IMAGES) {
+    throw new ApiError(400, `Mỗi sản phẩm chỉ được có tối đa ${MAX_PRODUCT_IMAGES} ảnh.`);
+  }
 
   const results = await Promise.all(req.files.map((file) => uploadBuffer(file, product._id)));
   product.images.push(...results.map((result, index) => ({
     url: result.secure_url,
     publicId: result.public_id,
-    alt: req.files[index].originalname,
+    alt: `${product.name} - ảnh ${product.images.length + index + 1}`,
   })));
   await product.save();
   res.status(201).json({ message: 'Đã tải ảnh lên Cloudinary.', data: product });

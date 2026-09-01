@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import authRoutes from './routes/authRoutes.js';
 import brandRoutes from './routes/brandRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -20,14 +21,20 @@ import returnRoutes from './routes/returnRoutes.js';
 import managementReturnRoutes from './routes/managementReturnRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
+import { apiRateLimiter } from './middlewares/rateLimit.js';
 
 const app = express();
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map((origin) => origin.trim());
 
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '100kb', parameterLimit: 50 }));
 
+app.get('/', (req, res) => res.json({ message: 'Phone Store API is running.', health: '/api/health' }));
+app.use('/api', apiRateLimiter);
 app.get('/api/health', (req, res) => res.json({ message: 'Phone Store API is running.' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/brands', brandRoutes);

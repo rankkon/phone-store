@@ -5,6 +5,8 @@ import { getCartDetails } from '../services/pricingService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+const MAX_CART_ITEMS = 50;
+
 function parseQuantity(value) {
   const quantity = Number(value);
   if (!Number.isInteger(quantity) || quantity < 1) throw new ApiError(400, 'Số lượng phải là số nguyên từ 1 trở lên.');
@@ -47,6 +49,9 @@ export const addCartItem = asyncHandler(async (req, res) => {
   const item = cart.items.find((candidate) => candidate.variantId.toString() === variantId);
   const nextQuantity = (item?.quantity || 0) + quantity;
   if (nextQuantity > variant.stock) throw new ApiError(400, `Chỉ còn ${variant.stock} sản phẩm trong kho.`);
+  if (!item && cart.items.length >= MAX_CART_ITEMS) {
+    throw new ApiError(400, `Giỏ hàng chỉ được chứa tối đa ${MAX_CART_ITEMS} sản phẩm khác nhau.`);
+  }
 
   if (item) item.quantity = nextQuantity;
   else cart.items.push({ productId, variantId, quantity });

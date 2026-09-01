@@ -7,9 +7,17 @@ export function notFound(req, res) {
 export function errorHandler(error, req, res, next) { // eslint-disable-line no-unused-vars
   console.error(error);
 
+  if (error.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'Dữ liệu gửi lên vượt quá dung lượng cho phép.' });
+  }
+
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    return res.status(400).json({ message: 'Dữ liệu JSON không hợp lệ.' });
+  }
+
   if (error instanceof MulterError) {
     const message = error.code === 'LIMIT_FILE_SIZE'
-      ? 'Mỗi ảnh chỉ được tối đa 5 MB.'
+      ? 'Ảnh vượt quá dung lượng cho phép.'
       : 'Không thể tải tệp lên.';
     return res.status(400).json({ message });
   }
@@ -30,8 +38,12 @@ export function errorHandler(error, req, res, next) { // eslint-disable-line no-
     return res.status(409).json({ message: `${field} đã tồn tại.` });
   }
 
-  return res.status(error.statusCode || 500).json({
-    message: error.message || 'Đã có lỗi xảy ra trên máy chủ.',
-    ...(error.details ? { details: error.details } : {}),
+  const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500;
+  const isProduction = process.env.NODE_ENV === 'production';
+  return res.status(statusCode).json({
+    message: statusCode >= 500 && isProduction
+      ? 'Đã có lỗi xảy ra trên máy chủ.'
+      : error.message || 'Đã có lỗi xảy ra trên máy chủ.',
+    ...(statusCode < 500 && error.details ? { details: error.details } : {}),
   });
 }

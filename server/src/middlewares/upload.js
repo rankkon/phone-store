@@ -6,7 +6,13 @@ const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 function imageUpload({ fileSize, files = 1 }) {
   return multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize, files },
+    limits: {
+      fileSize,
+      files,
+      fields: 10,
+      fieldSize: 64 * 1024,
+      parts: files + 10,
+    },
     fileFilter: (req, file, callback) => {
       if (!allowedImageTypes.has(file.mimetype)) {
         callback(new ApiError(400, 'Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.'));
